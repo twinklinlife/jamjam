@@ -1,6 +1,12 @@
 import type { Restaurant } from "@/lib/types";
 
-export default function RestaurantCard({ restaurant }: { restaurant: Restaurant }) {
+export default function RestaurantCard({
+  restaurant,
+  distanceLabel,
+}: {
+  restaurant: Restaurant;
+  distanceLabel?: string | null;
+}) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
@@ -12,6 +18,9 @@ export default function RestaurantCard({ restaurant }: { restaurant: Restaurant 
         )}
       </div>
       <p className="mt-1 text-sm text-gray-500">{restaurant.address}</p>
+      {distanceLabel && (
+        <p className="mt-1 text-sm text-gray-500">회사에서 {distanceLabel}</p>
+      )}
       {restaurant.signatureMenu && (
         <p className="mt-2 text-sm text-gray-700">
           <span className="font-medium">대표메뉴</span> {restaurant.signatureMenu}

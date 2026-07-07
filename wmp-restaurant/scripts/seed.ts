@@ -7,12 +7,19 @@ import { CATEGORIES, type Category, type Restaurant } from "../lib/types";
 
 const SOURCE_XLSX = path.join(__dirname, "source-data", "restaurants.xlsx");
 const ENRICHMENT_FILE = path.join(__dirname, "enrichment-result.json");
+const GEOCODE_FILE = path.join(__dirname, "geocode-result.json");
 const SEED_SNAPSHOT_FILE = path.join(__dirname, "..", "lib", "seed-data.json");
 
 interface EnrichmentEntry {
   naverLink: string;
   category: string | null;
   signatureMenu: string | null;
+}
+
+interface GeocodeEntry {
+  naverLink: string;
+  lat: number | null;
+  lng: number | null;
 }
 
 function isCategory(value: string | null): value is Category {
@@ -28,10 +35,17 @@ async function main() {
   }
   const enrichmentByLink = new Map(enrichment.map((e) => [e.naverLink, e]));
 
+  let geocode: GeocodeEntry[] = [];
+  if (fs.existsSync(GEOCODE_FILE)) {
+    geocode = JSON.parse(fs.readFileSync(GEOCODE_FILE, "utf-8"));
+  }
+  const geocodeByLink = new Map(geocode.map((g) => [g.naverLink, g]));
+
   const now = new Date().toISOString();
   const restaurants: Restaurant[] = rows.map((row) => {
     const enriched = enrichmentByLink.get(row.naverLink);
     const category = enriched && isCategory(enriched.category) ? enriched.category : null;
+    const geo = geocodeByLink.get(row.naverLink);
     return {
       id: randomUUID(),
       name: row.name,
@@ -39,8 +53,8 @@ async function main() {
       naverLink: row.naverLink,
       category,
       signatureMenu: enriched?.signatureMenu ?? null,
-      lat: null,
-      lng: null,
+      lat: geo?.lat ?? null,
+      lng: geo?.lng ?? null,
       updatedAt: now,
     };
   });

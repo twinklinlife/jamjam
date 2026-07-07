@@ -7,10 +7,29 @@ import UploadForm from "./UploadForm";
 export default function AdminTable({ initialRestaurants }: { initialRestaurants: Restaurant[] }) {
   const [restaurants, setRestaurants] = useState(initialRestaurants);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeMessage, setGeocodeMessage] = useState<string | null>(null);
 
   async function refresh() {
     const res = await fetch("/api/restaurants");
     setRestaurants(await res.json());
+  }
+
+  async function handleGeocode() {
+    setGeocoding(true);
+    setGeocodeMessage(null);
+    try {
+      const res = await fetch("/api/admin/geocode", { method: "POST" });
+      const data = (await res.json()) as { updated?: number; total?: number; error?: string };
+      if (!res.ok) {
+        setGeocodeMessage(data.error ?? "좌표 갱신에 실패했습니다.");
+        return;
+      }
+      setGeocodeMessage(`${data.updated}건 갱신 완료 (전체 ${data.total}건)`);
+      await refresh();
+    } finally {
+      setGeocoding(false);
+    }
   }
 
   async function handleChange(id: string, patch: Partial<Pick<Restaurant, "category" | "signatureMenu">>) {
@@ -49,6 +68,17 @@ export default function AdminTable({ initialRestaurants }: { initialRestaurants:
       </div>
 
       <UploadForm onMerged={refresh} />
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <button
+          onClick={handleGeocode}
+          disabled={geocoding}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {geocoding ? "갱신 중..." : "좌표(거리) 정보 갱신"}
+        </button>
+        {geocodeMessage && <p className="text-sm text-gray-600">{geocodeMessage}</p>}
+      </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
