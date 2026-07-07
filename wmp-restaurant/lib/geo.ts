@@ -24,11 +24,17 @@ export function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)}km`;
 }
 
-export const DISTANCE_BANDS = ["500m 이내", "500m~1km 이내", "1km 이상"] as const;
+export const DISTANCE_BANDS = [
+  "300m 이내",
+  "300m~500m 이내",
+  "500m~1km 이내",
+  "1km 이상",
+] as const;
 export type DistanceBand = (typeof DISTANCE_BANDS)[number];
 
 export function distanceBand(meters: number): DistanceBand {
-  if (meters <= 500) return "500m 이내";
+  if (meters <= 300) return "300m 이내";
+  if (meters <= 500) return "300m~500m 이내";
   if (meters <= 1000) return "500m~1km 이내";
   return "1km 이상";
 }
