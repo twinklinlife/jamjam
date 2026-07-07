@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wmp-restaurant",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // Cloudflare 대시보드에서 KV 네임스페이스를 만든 뒤 아래 "id" 값을 실제 네임스페이스 ID로 교체하세요.
+  // 변수명(binding)은 반드시 "RESTAURANTS_KV" 이어야 합니다 (lib/store.ts 에서 이 이름으로 참조).
+  "kv_namespaces": [
+    {
+      "binding": "RESTAURANTS_KV",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ]
+}
