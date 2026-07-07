@@ -7,6 +7,7 @@ import { CATEGORIES, type Category, type Restaurant } from "../lib/types";
 
 const SOURCE_XLSX = path.join(__dirname, "source-data", "restaurants.xlsx");
 const ENRICHMENT_FILE = path.join(__dirname, "enrichment-result.json");
+const SEED_SNAPSHOT_FILE = path.join(__dirname, "..", "lib", "seed-data.json");
 
 interface EnrichmentEntry {
   naverLink: string;
@@ -45,6 +46,7 @@ async function main() {
   });
 
   await writeRestaurants(restaurants);
+  fs.writeFileSync(SEED_SNAPSHOT_FILE, JSON.stringify(restaurants, null, 2));
 
   const filled = restaurants.filter((r) => r.category).length;
   console.log(`Seeded ${restaurants.length} restaurants (${filled} with category/menu filled in).`);
