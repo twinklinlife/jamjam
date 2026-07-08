@@ -222,7 +222,13 @@ function createRagdoll(scene, x, feetY, side, scaleMult) {
     let obj;
     if (isCircle) obj = scene.add.circle(px, py, w, color);
     else obj = scene.add.rectangle(px, py, w, h, color);
-    M.add.gameObject(obj, { shape: isCircle ? { type: 'circle', radius: w } : { type: 'rectangle', width: w, height: h }, frictionAir: 0.02, friction: 0.6 });
+    M.add.gameObject(obj, { shape: isCircle ? { type: 'circle', radius: w } : { type: 'rectangle', width: w, height: h }, frictionAir: 0.05, friction: 0.6 });
+    // Lock rotation: a single point-to-point constraint only fixes distance, not
+    // angle, so an unlocked limb swings like a pendulum under gravity instead of
+    // staying attached at its anatomical offset. Locking inertia keeps limbs
+    // planted while still letting them translate/wobble when hit.
+    obj.body.inertia = Infinity;
+    obj.body.inverseInertia = 0;
     obj.setData('partType', partType);
     obj.setData('side', side);
     obj.body.label = side + '_' + partType;
