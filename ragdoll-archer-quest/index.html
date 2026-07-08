@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Ragdoll Archer Quest</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0b0d10;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #game-container {
+    width: 100%;
+    height: 100%;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+<script>
+/* =========================================================
+   Ragdoll Archer Quest — single-file Phaser 3 + Matter game
+   ========================================================= */
+
+/* ---------- Config / data tables ---------- */
+const W = 1280, H = 720;
+const STAGE_MAX = 10;
+
+const STEP_HZ = 60;
+const GRAVITY_PX = 1000;          // px/s^2, calibrated empirically against Matter world gravity (y:1)
+const VELOCITY_SCALE = 5.6;       // px dragged -> px/s launch speed
+const MAX_DRAG = 150;
+const MIN_DRAG = 18;
+
+const SHOT_ORIGIN = { x: 300, y: H - 210 };
+const GROUND_Y = H - 110;
+const PLAYER_X = 300;
+const ENEMY_X = 1000;
+
+const DAMAGE_BASE = { head: 40, torso: 20, limb: 10 };
+
+const RARITY_COLOR = { gray: 0x9aa0a6, green: 0x4caf50, blue: 0x4a90d9, purple: 0x9b59b6 };
+
+const WEAPONS = [
+  { id: 'bow_worn',   name: 'Worn Bow',  rarity: 'gray',   price: 0,   atk: 0,   atkspd: 0 },
+  { id: 'bow_hunter', name: 'Hunter Bow',rarity: 'green',  price: 150, atk: 0.3, atkspd: 0 },
+  { id: 'bow_rapid',  name: 'Rapid Bow', rarity: 'blue',   price: 350, atk: 0.1, atkspd: 0.25 },
+  { id: 'bow_war',    name: 'War Bow',   rarity: 'purple', price: 700, atk: 0.7, atkspd: -0.05 },
+];
+const ARMORS = [
+  { id: 'arm_cloth',   name: 'Cloth',        rarity: 'gray',   price: 0,   hp: 0,  def: 0 },
+  { id: 'arm_leather', name: 'Leather Vest', rarity: 'green',  price: 150, hp: 40, def: 0 },
+  { id: 'arm_iron',    name: 'Iron Guard',   rarity: 'blue',   price: 350, hp: 0,  def: 0.25 },
+  { id: 'arm_plate',   name: 'Plate Armor',  rarity: 'purple', price: 700, hp: 60, def: 0.35 },
+];
+
+function weaponById(id) { return WEAPONS.find(w => w.id === id) || WEAPONS[0]; }
+function armorById(id) { return ARMORS.find(a => a.id === id) || ARMORS[0]; }
+
+function enemyHpFor(stage) {
+  const isBoss = stage % 5 === 0;
+  let hp = 60 + stage * 15;
+  if (isBoss) hp *= 2.5;
+  return Math.round(hp);
+}
+function enemyReloadFor(stage) { return Math.max(900, 2000 - stage * 80); }
+function enemyAimErrorFor(stage) { return Math.max(3, 14 - stage * 1); } // degrees
+function goldFor(stage) {
+  const isBoss = stage % 5 === 0;
+  let g = 40 + stage * 10;
+  if (isBoss) g *= 3;
+  return Math.round(g);
+}
+function isBossStage(stage) { return stage % 5 === 0; }
+
+function computePlayerStats(save) {
+  const w = weaponById(save.equippedWeapon);
+  const a = armorById(save.equippedArmor);
+  const atk = 1 + w.atk;
+  const atkspd = Math.max(-0.5, w.atkspd);
+  const maxHp = 100 + a.hp;
+  const def = Math.min(0.6, a.def);
+  const reload = Math.max(250, 1000 * (1 - atkspd));
+  return { atk, atkspd, maxHp, def, reload, weapon: w, armor: a };
+}
+
+/* ---------- Save / persistence ---------- */
+const SAVE_KEY = 'ragdollArcherQuest_v1';
+
+function defaultSave() {
+  return {
+    gold: 0,
+    ownedWeapons: ['bow_worn'],
+    ownedArmors: ['arm_cloth'],
+    equippedWeapon: 'bow_worn',
+    equippedArmor: 'arm_cloth',
+    bestScore: 0,
+    bestStage: 0,
+    nickname: 'Archer' + Math.floor(1000 + Math.random() * 9000),
+    runActive: false,
+    currentStage: 1,
+    runScore: 0,
+    clearedStages: 0,
+    leaderboard: [],
+  };
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return defaultSave();
+    const parsed = JSON.parse(raw);
+    return Object.assign(defaultSave(), parsed);
+  } catch (e) {
+    console.warn('save load failed, using defaults', e);
+    return defaultSave();
+  }
+}
+
+function persistSave() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE));
+  } catch (e) {
+    console.warn('save persist failed', e);
+  }
+}
+
+let SAVE = loadSave();
+
+function addLeaderboardEntry(clearedStages, runScore) {
+  const combined = clearedStages * 100000 + runScore;
+  SAVE.leaderboard.push({
+    name: SAVE.nickname,
+    stage: clearedStages,
+    score: runScore,
+    combined,
+    date: new Date().toLocaleDateString(),
+  });
+  SAVE.leaderboard.sort((a, b) => b.combined - a.combined);
+  SAVE.leaderboard = SAVE.leaderboard.slice(0, 10);
+  if (combined > (SAVE.bestScore * 0 + (SAVE.bestStage * 100000 + SAVE.bestScore))) {
+    // best tracked via bestStage/bestScore combined comparison
+  }
+  if (clearedStages > SAVE.bestStage || (clearedStages === SAVE.bestStage && runScore > SAVE.bestScore)) {
+    SAVE.bestStage = clearedStages;
+    SAVE.bestScore = runScore;
+  }
+  persistSave();
+  return combined;
+}
+
+/* ---------- Small UI helpers ---------- */
+function makeButton(scene, x, y, w, h, label, opts) {
+  opts = opts || {};
+  const bgColor = opts.bg !== undefined ? opts.bg : 0x2d6cdf;
+  const fontSize = opts.fontSize || 22;
+  const rect = scene.add.rectangle(x, y, w, h, bgColor, 1).setStrokeStyle(2, 0xffffff, 0.25);
+  const text = scene.add.text(x, y, label, {
+    fontFamily: 'Arial, sans-serif', fontSize: fontSize + 'px', color: '#ffffff', fontStyle: 'bold',
+  }).setOrigin(0.5);
+  const enabledState = { enabled: opts.enabled !== false };
+  function refreshVisual() {
+    rect.setFillStyle(enabledState.enabled ? bgColor : 0x555555, 1);
+    rect.setAlpha(enabledState.enabled ? 1 : 0.6);
+    text.setAlpha(enabledState.enabled ? 1 : 0.6);
+  }
+  refreshVisual();
+  rect.setInteractive({ useHandCursor: true });
+  rect.on('pointerover', () => { if (enabledState.enabled) rect.setFillStyle(bgColor, 0.8); });
+  rect.on('pointerout', () => refreshVisual());
+  rect.on('pointerdown', () => {
+    if (!enabledState.enabled) return;
+    if (opts.onClick) opts.onClick();
+  });
+  return {
+    rect, text,
+    setEnabled(v) { enabledState.enabled = v; refreshVisual(); },
+    setLabel(v) { text.setText(v); },
+    destroy() { rect.destroy(); text.destroy(); },
+  };
+}
+
+function fmt(n) { return Math.round(n).toLocaleString(); }
+
+/* ---------- Ragdoll factory ---------- */
+// side: 'player' | 'enemy'
+function createRagdoll(scene, x, feetY, side, scaleMult) {
+  scaleMult = scaleMult || 1;
+  const isPlayer = side === 'player';
+  const bodyTone = isPlayer ? 0x3b6fa0 : 0xa04040;
+  const skinTone = 0xd8b98c;
+  const M = scene.matter;
+
+  const torsoW = 30 * scaleMult, torsoH = 50 * scaleMult;
+  const headR = 16 * scaleMult;
+  const limbW = 11 * scaleMult, limbH = 38 * scaleMult;
+
+  const torsoY = feetY - torsoH - limbH + 10;
+  const headY = torsoY - torsoH / 2 - headR + 4;
+  const armY = torsoY - torsoH / 4;
+  const legY = torsoY + torsoH / 2 + limbH / 2 - 6;
+
+  const CAT_GROUND = 0x0001;
+  const CAT_PLAYER_PART = 0x0002;
+  const CAT_ENEMY_PART = 0x0004;
+  const CAT_PLAYER_ARROW = 0x0008;
+  const CAT_ENEMY_ARROW = 0x0010;
+
+  const partCat = isPlayer ? CAT_PLAYER_PART : CAT_ENEMY_PART;
+  const collidesWithArrow = isPlayer ? CAT_ENEMY_ARROW : CAT_PLAYER_ARROW;
+
+  function mkPart(px, py, w, h, isCircle, color, partType) {
+    let obj;
+    if (isCircle) obj = scene.add.circle(px, py, w, color);
+    else obj = scene.add.rectangle(px, py, w, h, color);
+    M.add.gameObject(obj, { shape: isCircle ? { type: 'circle', radius: w } : { type: 'rectangle', width: w, height: h }, frictionAir: 0.02, friction: 0.6 });
+    obj.setData('partType', partType);
+    obj.setData('side', side);
+    obj.body.label = side + '_' + partType;
+    obj.setCollisionCategory(partCat);
+    obj.setCollidesWith([CAT_GROUND, collidesWithArrow]);
+    return obj;
+  }
+
+  const torso = mkPart(x, torsoY, torsoW, torsoH, false, bodyTone, 'torso');
+  const head = mkPart(x, headY, headR, 0, true, skinTone, 'head');
+  const armL = mkPart(x - torsoW / 2 - limbW / 2 + 2, armY, limbW, limbH, false, bodyTone, 'limb');
+  const armR = mkPart(x + torsoW / 2 + limbW / 2 - 2, armY, limbW, limbH, false, bodyTone, 'limb');
+  const legL = mkPart(x - torsoW / 4, legY, limbW, limbH, false, 0x2b2f36, 'limb');
+  const legR = mkPart(x + torsoW / 4, legY, limbW, limbH, false, 0x2b2f36, 'limb');
+
+  // static anchor pins the torso roughly in place, allows wobble
+  // matter.add.circle returns a raw Matter body (not a Phaser GameObject),
+  // so collision filtering is set via collisionFilter directly.
+  const anchor = M.add.circle(x, torsoY, 2, { isStatic: true, isSensor: true, render: { visible: false } });
+  anchor.collisionFilter.category = 0;
+  anchor.collisionFilter.mask = 0;
+
+  const constraints = [];
+  constraints.push(M.add.constraint(anchor, torso.body, 0, 0.85));
+  constraints.push(M.add.constraint(torso.body, head.body, 6 * scaleMult, 0.7, { pointA: { x: 0, y: -torsoH / 2 }, pointB: { x: 0, y: headR - 2 } }));
+  constraints.push(M.add.constraint(torso.body, armL.body, 4 * scaleMult, 0.55, { pointA: { x: -torsoW / 2, y: -torsoH / 3 }, pointB: { x: 0, y: -limbH / 2 } }));
+  constraints.push(M.add.constraint(torso.body, armR.body, 4 * scaleMult, 0.55, { pointA: { x: torsoW / 2, y: -torsoH / 3 }, pointB: { x: 0, y: -limbH / 2 } }));
+  constraints.push(M.add.constraint(torso.body, legL.body, 4 * scaleMult, 0.75, { pointA: { x: -torsoW / 4, y: torsoH / 2 }, pointB: { x: 0, y: -limbH / 2 } }));
+  constraints.push(M.add.constraint(torso.body, legR.body, 4 * scaleMult, 0.75, { pointA: { x: torsoW / 4, y: torsoH / 2 }, pointB: { x: 0, y: -limbH / 2 } }));
+
+  const parts = { torso, head, armL, armR, legL, legR };
+
+  return {
+    x, feetY, side, parts, anchor, constraints,
+    allBodies: [torso, head, armL, armR, legL, legR],
+    setTint(color) { Object.values(parts).forEach(p => { if (p.active) p.setFillStyle(color); }); },
+    flashPart(part) {
+      const orig = part.fillColor;
+      part.setFillStyle(0xffffff);
+      scene.time.delayedCall(90, () => { if (part.active) part.setFillStyle(orig); });
+    },
+    ragdollize() {
+      // loosen on death for a floppy collapse
+      constraints.forEach(c => { c.stiffness = 0.15; });
+      this.allBodies.forEach(p => { if (p.active) p.setCollidesWith([]); });
+    },
+    destroy() {
+      constraints.forEach(c => scene.matter.world.removeConstraint(c));
+      this.allBodies.forEach(p => p.destroy());
+      scene.matter.world.remove(anchor);
+    },
+  };
+}
+
+const CAT = { GROUND: 0x0001, PLAYER_PART: 0x0002, ENEMY_PART: 0x0004, PLAYER_ARROW: 0x0008, ENEMY_ARROW: 0x0010 };
+
+/* ================= MENU SCENE ================= */
+class MenuScene extends Phaser.Scene {
+  constructor() { super('MenuScene'); }
+  create() {
+    this.add.rectangle(0, 0, W, H, 0x14181f).setOrigin(0);
+    this.add.text(W / 2, 120, 'RAGDOLL ARCHER QUEST', {
+      fontFamily: 'Arial, sans-serif', fontSize: '56px', color: '#f2f2f2', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.add.text(W / 2, 175, '드래그로 조준, 놓아서 발사 — 부위를 맞춰 스테이지를 돌파하세요', {
+      fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#a9b2c0',
+    }).setOrigin(0.5);
+
+    // leaderboard panel
+    const panelX = W / 2 - 260, panelY = 230, panelW = 520, panelH = 300;
+    this.add.rectangle(panelX, panelY, panelW, panelH, 0x1d232c, 0.9).setOrigin(0).setStrokeStyle(2, 0x33404f);
+    this.add.text(panelX + panelW / 2, panelY + 24, 'LOCAL LEADERBOARD', {
+      fontFamily: 'Arial, sans-serif', fontSize: '20px', color: '#ffd166', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const top = SAVE.leaderboard.slice(0, 5);
+    if (top.length === 0) {
+      this.add.text(panelX + panelW / 2, panelY + 90, '아직 기록이 없습니다', {
+        fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#7d8794',
+      }).setOrigin(0.5);
+    } else {
+      top.forEach((e, i) => {
+        const ry = panelY + 60 + i * 40;
+        this.add.text(panelX + 24, ry, `${i + 1}.`, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffffff' });
+        this.add.text(panelX + 64, ry, e.name, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#ffffff' });
+        this.add.text(panelX + panelW - 24, ry, `STAGE ${e.stage} · ${fmt(e.score)} pts`, {
+          fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#9fd2ff',
+        }).setOrigin(1, 0);
+      });
+    }
+
+    const canResume = SAVE.runActive && SAVE.currentStage > 1;
+    const btnY = 610;
+    makeButton(this, W / 2 - (canResume ? 140 : 0), btnY, 260, 60, '새 게임', {
+      bg: 0x2d6cdf,
+      onClick: () => {
+        SAVE.currentStage = 1;
+        SAVE.runScore = 0;
+        SAVE.clearedStages = 0;
+        SAVE.runActive = true;
+        persistSave();
+        this.scene.start('GameScene', { stage: 1 });
+      },
+    });
+    if (canResume) {
+      makeButton(this, W / 2 + 140, btnY, 260, 60, `이어하기 (Stage ${SAVE.currentStage})`, {
+        bg: 0x3a9e5f,
+        onClick: () => { this.scene.start('GameScene', { stage: SAVE.currentStage }); },
+      });
+    }
+
+    this.add.text(W / 2, 690, `보유 골드: ${fmt(SAVE.gold)}   최고 기록: STAGE ${SAVE.bestStage} · ${fmt(SAVE.bestScore)} pts`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '15px', color: '#7d8794',
+    }).setOrigin(0.5);
+  }
+}
+
+/* ================= GAME SCENE ================= */
+class GameScene extends Phaser.Scene {
+  constructor() { super('GameScene'); }
+
+  init(data) { this.stage = data.stage || 1; }
+
+  create() {
+    this.matter.world.setBounds(0, 0, W, H + 200);
+    this.matter.world.engine.gravity.y = 1;
+
+    this.add.rectangle(0, 0, W, H, 0x1a2230).setOrigin(0);
+    // simple gradient-ish backdrop bands
+    this.add.rectangle(0, H - 260, W, 260, 0x222c3a).setOrigin(0);
+
+    // ground
+    const ground = this.matter.add.rectangle(W / 2, GROUND_Y + 40, W, 80, { isStatic: true });
+    ground.collisionFilter.category = CAT.GROUND;
+    ground.collisionFilter.mask = 0xffff;
+    this.add.rectangle(W / 2, GROUND_Y + 20, W, 40, 0x2e3b2a).setOrigin(0.5);
+
+    this.stats = computePlayerStats(SAVE);
+    this.playerHP = this.stats.maxHp;
+    this.playerMaxHP = this.stats.maxHp;
+
+    const boss = isBossStage(this.stage);
+    this.enemyMaxHP = enemyHpFor(this.stage);
+    this.enemyHP = this.enemyMaxHP;
+    this.enemyReload = enemyReloadFor(this.stage);
+    this.enemyAimError = enemyAimErrorFor(this.stage);
+
+    this.player = createRagdoll(this, PLAYER_X, GROUND_Y, 'player', 1);
+    this.enemy = createRagdoll(this, ENEMY_X, GROUND_Y, 'enemy', boss ? 1.35 : 1);
+    if (boss) this.enemy.setTint(0x7a3fa0);
+
+    this.arrows = [];
+    this.dots = [];
+    for (let i = 0; i < 14; i++) {
+      const d = this.add.circle(0, 0, 3, 0xffe37a, 0.8).setVisible(false);
+      this.dots.push(d);
+    }
+    this.aimLine = this.add.line(0, 0, 0, 0, 0, 0, 0xffffff, 0.4).setLineWidth(2).setVisible(false);
+
+    this.state = 'AIMING';
+    this.isDragging = false;
+    this.lastShotTime = -99999;
+    this.lastEnemyShotTime = this.time.now;
+
+    this.buildHud(boss);
+
+    this.input.on('pointerdown', (p) => {
+      if (this.state !== 'AIMING') return;
+      if (!this.canFire()) return;
+      this.isDragging = true;
+      this.updateAimVisual(p.x, p.y);
+    });
+    this.input.on('pointermove', (p) => {
+      if (!this.isDragging) return;
+      this.updateAimVisual(p.x, p.y);
+    });
+    this.input.on('pointerup', (p) => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      this.releaseShot(p.x, p.y);
+      this.hideAimVisual();
+    });
+
+    this.matter.world.on('collisionstart', (event) => this.onCollision(event));
+
+    this.redFlash = this.add.rectangle(0, 0, W, H, 0xff0000, 0).setOrigin(0);
+  }
+
+  buildHud(boss) {
+    const margin = 24;
+    this.hudStage = this.add.text(W / 2, margin, `STAGE ${this.stage}${boss ? '  (BOSS)' : ''}`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '24px', color: boss ? '#ffd166' : '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
+
+    this.hudScore = this.add.text(margin, margin, `SCORE ${fmt(SAVE.runScore)}   GOLD ${fmt(SAVE.gold)}`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#9fd2ff',
+    }).setOrigin(0, 0);
+
+    // HP bars
+    this.playerHpBarBg = this.add.rectangle(margin, 64, 260, 20, 0x33393f).setOrigin(0, 0.5);
+    this.playerHpBar = this.add.rectangle(margin, 64, 260, 20, 0x4caf50).setOrigin(0, 0.5);
+    this.add.text(margin, 44, 'PLAYER', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#c8d3e0' });
+
+    this.enemyHpBarBg = this.add.rectangle(W - margin, 64, 260, 20, 0x33393f).setOrigin(1, 0.5);
+    this.enemyHpBar = this.add.rectangle(W - margin, 64, 260, 20, 0xd9534f).setOrigin(1, 0.5);
+    this.add.text(W - margin, 44, 'ENEMY', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#c8d3e0' }).setOrigin(1, 0);
+
+    this.reloadBarBg = this.add.rectangle(margin, 92, 160, 10, 0x33393f).setOrigin(0, 0.5);
+    this.reloadBar = this.add.rectangle(margin, 92, 160, 10, 0xffd166).setOrigin(0, 0.5);
+  }
+
+  canFire() { return this.time.now - this.lastShotTime >= this.stats.reload; }
+
+  updateAimVisual(px, py) {
+    let dx = SHOT_ORIGIN.x - px, dy = SHOT_ORIGIN.y - py;
+    const len = Math.hypot(dx, dy);
+    const clampedLen = Math.min(len, MAX_DRAG);
+    if (len > 0) { dx = dx / len * clampedLen; dy = dy / len * clampedLen; }
+    const handX = SHOT_ORIGIN.x - dx, handY = SHOT_ORIGIN.y - dy;
+    this.aimLine.setTo(SHOT_ORIGIN.x, SHOT_ORIGIN.y, handX, handY).setVisible(true);
+
+    const vx = dx / MAX_DRAG * VELOCITY_SCALE * MAX_DRAG;
+    const vy = dy / MAX_DRAG * VELOCITY_SCALE * MAX_DRAG;
+    this.drawTrajectory(vx, vy);
+  }
+
+  drawTrajectory(vx, vy) {
+    const steps = this.dots.length;
+    for (let i = 0; i < steps; i++) {
+      const t = (i + 1) * 0.06;
+      const x = SHOT_ORIGIN.x + vx * t;
+      const y = SHOT_ORIGIN.y + vy * t + 0.5 * GRAVITY_PX * t * t;
+      if (y > GROUND_Y + 30 || x > W || x < 0) { this.dots[i].setVisible(false); continue; }
+      this.dots[i].setPosition(x, y).setVisible(true);
+    }
+  }
+
+  hideAimVisual() {
+    this.aimLine.setVisible(false);
+    this.dots.forEach(d => d.setVisible(false));
+  }
+
+  releaseShot(px, py) {
+    let dx = SHOT_ORIGIN.x - px, dy = SHOT_ORIGIN.y - py;
+    const len = Math.hypot(dx, dy);
+    if (len < MIN_DRAG) return; // cancelled, too short
+    const clampedLen = Math.min(len, MAX_DRAG);
+    dx = dx / len * clampedLen; dy = dy / len * clampedLen;
+    const vx = dx / MAX_DRAG * VELOCITY_SCALE * MAX_DRAG;
+    const vy = dy / MAX_DRAG * VELOCITY_SCALE * MAX_DRAG;
+    this.spawnArrow(SHOT_ORIGIN.x, SHOT_ORIGIN.y, vx, vy, 'player');
+    this.lastShotTime = this.time.now;
+  }
+
+  spawnArrow(x, y, vx, vy, owner) {
+    const arrow = this.add.rectangle(x, y, 20, 3, owner === 'player' ? 0xf2e6c9 : 0xff8080);
+    this.matter.add.gameObject(arrow, { shape: { type: 'rectangle', width: 20, height: 3 }, frictionAir: 0, friction: 0, restitution: 0.1 });
+    arrow.body.inertia = Infinity;
+    arrow.body.inverseInertia = 0;
+    arrow.setCollisionCategory(owner === 'player' ? CAT.PLAYER_ARROW : CAT.ENEMY_ARROW);
+    arrow.setCollidesWith([CAT.GROUND, owner === 'player' ? CAT.ENEMY_PART : CAT.PLAYER_PART]);
+    arrow.setVelocity(vx / STEP_HZ, vy / STEP_HZ);
+    arrow.setData('owner', owner);
+    arrow.rotation = Math.atan2(vy, vx);
+    arrow.setData('spawnTime', this.time.now);
+    this.arrows.push(arrow);
+    return arrow;
+  }
+
+  onCollision(event) {
+    for (const pair of event.pairs) {
+      const a = pair.bodyA.gameObject, b = pair.bodyB.gameObject;
+      if (!a || !b) continue;
+      let arrowObj = null, partObj = null;
+      if (a.getData && a.getData('owner') !== undefined) { arrowObj = a; partObj = b; }
+      else if (b.getData && b.getData('owner') !== undefined) { arrowObj = b; partObj = a; }
+      if (!arrowObj || !partObj || !partObj.getData) continue;
+      const partType = partObj.getData('partType');
+      if (!partType) continue; // hit ground or something else
+      const owner = arrowObj.getData('owner');
+      const side = partObj.getData('side');
+      if (owner === 'player' && side === 'enemy') this.handleHit(arrowObj, partObj, partType, 'enemy');
+      else if (owner === 'enemy' && side === 'player') this.handleHit(arrowObj, partObj, partType, 'player');
+    }
+  }
+
+  handleHit(arrow, part, partType, targetSide) {
+    if (!arrow.active) return;
+    const contact = { x: part.x, y: part.y };
+    this.impactFlash(contact.x, contact.y);
+    const vel = arrow.body.velocity;
+    if (part.active) {
+      Phaser.Physics.Matter.Matter.Body.applyForce(part.body, part.body.position, { x: vel.x * 0.06, y: vel.y * 0.06 });
+    }
+    this.destroyArrow(arrow);
+
+    if (targetSide === 'enemy') {
+      const dmg = Math.round(DAMAGE_BASE[partType] * this.stats.atk);
+      this.enemyHP = Math.max(0, this.enemyHP - dmg);
+      SAVE.runScore += dmg;
+      this.hudScore.setText(`SCORE ${fmt(SAVE.runScore)}   GOLD ${fmt(SAVE.gold)}`);
+      this.enemyHpBar.width = 260 * (this.enemyHP / this.enemyMaxHP);
+      this.enemy.flashPart(part);
+      this.popupScore(contact.x, contact.y - 20, partType.toUpperCase() + ' ' + dmg, partType === 'head' ? '#ffd166' : '#ffffff');
+      this.cameras.main.shake(partType === 'head' ? 140 : 80, partType === 'head' ? 0.008 : 0.004);
+      if (this.enemyHP <= 0 && this.state === 'AIMING') this.onEnemyDefeated();
+    } else {
+      const dmgRaw = Phaser.Math.Between(8, 14);
+      const dmg = Math.round(dmgRaw * (1 - this.stats.def));
+      this.playerHP = Math.max(0, this.playerHP - dmg);
+      this.playerHpBar.width = 260 * (this.playerHP / this.playerMaxHP);
+      this.player.flashPart(part);
+      this.flashRed();
+      this.cameras.main.shake(100, 0.006);
+      if (this.playerHP <= 0 && this.state === 'AIMING') this.onPlayerDefeated();
+    }
+  }
+
+  impactFlash(x, y) {
+    const c = this.add.circle(x, y, 6, 0xffffff, 0.9);
+    this.tweens.add({ targets: c, radius: 22, alpha: 0, duration: 260, onComplete: () => c.destroy() });
+  }
+
+  popupScore(x, y, text, color) {
+    const t = this.add.text(x, y, text, { fontFamily: 'Arial, sans-serif', fontSize: '18px', color, fontStyle: 'bold' }).setOrigin(0.5);
+    this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 700, onComplete: () => t.destroy() });
+  }
+
+  flashRed() {
+    this.redFlash.setAlpha(0.35);
+    this.tweens.add({ targets: this.redFlash, alpha: 0, duration: 250 });
+  }
+
+  destroyArrow(arrow) {
+    arrow.active = false;
+    const idx = this.arrows.indexOf(arrow);
+    if (idx >= 0) this.arrows.splice(idx, 1);
+    arrow.destroy();
+  }
+
+  onEnemyDefeated() {
+    this.state = 'CLEAR';
+    this.enemy.ragdollize();
+    const boss = isBossStage(this.stage);
+    const gold = goldFor(this.stage);
+    SAVE.gold += gold;
+    SAVE.runScore += 100 * this.stage + (boss ? 300 : 0);
+    SAVE.clearedStages = Math.max(SAVE.clearedStages, this.stage);
+    SAVE.currentStage = this.stage + 1;
+    SAVE.runActive = true;
+    persistSave();
+
+    this.add.text(W / 2, H / 2 - 60, boss ? 'BOSS DEFEATED!' : 'STAGE CLEAR!', {
+      fontFamily: 'Arial, sans-serif', fontSize: '42px', color: '#ffd166', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.add.text(W / 2, H / 2, `+${gold} GOLD`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '22px', color: '#9fd2ff',
+    }).setOrigin(0.5);
+
+    this.time.delayedCall(1400, () => {
+      if (this.stage >= STAGE_MAX) {
+        const combined = addLeaderboardEntry(SAVE.clearedStages, SAVE.runScore);
+        SAVE.runActive = false;
+        persistSave();
+        this.scene.start('ResultScene', { win: true, combined });
+      } else {
+        this.scene.start('ShopScene', { comingStage: this.stage + 1 });
+      }
+    });
+  }
+
+  onPlayerDefeated() {
+    this.state = 'DEAD';
+    this.player.ragdollize();
+    const combined = addLeaderboardEntry(SAVE.clearedStages, SAVE.runScore);
+    SAVE.runActive = false;
+    persistSave();
+
+    this.add.text(W / 2, H / 2 - 20, 'DEFEATED', {
+      fontFamily: 'Arial, sans-serif', fontSize: '48px', color: '#ff6b6b', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    this.time.delayedCall(1400, () => {
+      this.scene.start('ResultScene', { win: false, combined });
+    });
+  }
+
+  update(time, delta) {
+    // reload gauge
+    const readiness = Phaser.Math.Clamp((time - this.lastShotTime) / this.stats.reload, 0, 1);
+    this.reloadBar.width = 160 * readiness;
+    this.reloadBar.setFillStyle(readiness >= 1 ? 0x4caf50 : 0xffd166);
+
+    // enemy auto-fire
+    if (this.state === 'AIMING' && time - this.lastEnemyShotTime >= this.enemyReload) {
+      this.lastEnemyShotTime = time;
+      this.enemyFire();
+    }
+
+    // arrow rotation follow velocity + cleanup off-screen/settled arrows
+    for (let i = this.arrows.length - 1; i >= 0; i--) {
+      const arrow = this.arrows[i];
+      if (!arrow.active) continue;
+      const v = arrow.body.velocity;
+      if (Math.hypot(v.x, v.y) > 0.02) arrow.rotation = Math.atan2(v.y, v.x);
+      if (arrow.y > H + 100 || arrow.x < -50 || arrow.x > W + 50 || time - arrow.getData('spawnTime') > 6000) {
+        this.destroyArrow(arrow);
+      }
+    }
+  }
+
+  enemyFire() {
+    const targetX = this.player.parts.torso.x + Phaser.Math.Between(-6, 6);
+    const targetY = this.player.parts.torso.y;
+    const T = 0.85;
+    const dx = targetX - ENEMY_X, dy = targetY - SHOT_ORIGIN.y;
+    let vx = dx / T;
+    let vy = (dy - 0.5 * GRAVITY_PX * T * T) / T;
+    const speed = Math.hypot(vx, vy);
+    let angle = Math.atan2(vy, vx);
+    const errRad = Phaser.Math.DegToRad(this.enemyAimError);
+    angle += Phaser.Math.FloatBetween(-errRad, errRad);
+    vx = Math.cos(angle) * speed;
+    vy = Math.sin(angle) * speed;
+    this.spawnArrow(ENEMY_X, SHOT_ORIGIN.y, vx, vy, 'enemy');
+  }
+}
+
+/* ================= SHOP SCENE ================= */
+class ShopScene extends Phaser.Scene {
+  constructor() { super('ShopScene'); }
+  init(data) { this.comingStage = data.comingStage; }
+
+  create() {
+    this.add.rectangle(0, 0, W, H, 0x14181f).setOrigin(0);
+    this.add.text(W / 2, 34, 'SHOP & PROFILE', {
+      fontFamily: 'Arial, sans-serif', fontSize: '30px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
+
+    this.buildStatsPanel();
+    this.buildShopPanel();
+
+    makeButton(this, W / 2, H - 50, 300, 56, `다음 스테이지 (${this.comingStage})`, {
+      bg: 0x2d6cdf,
+      onClick: () => { this.scene.start('GameScene', { stage: this.comingStage }); },
+    });
+  }
+
+  buildStatsPanel() {
+    const x = 40, y = 90, w = 380, h = 560;
+    this.add.rectangle(x, y, w, h, 0x1d232c, 0.9).setOrigin(0).setStrokeStyle(2, 0x33404f);
+    this.add.text(x + 20, y + 16, '내 스탯', { fontFamily: 'Arial, sans-serif', fontSize: '22px', color: '#ffd166', fontStyle: 'bold' });
+
+    const stats = computePlayerStats(SAVE);
+    const lines = [
+      `HP        ${fmt(stats.maxHp)}`,
+      `ATK       x${stats.atk.toFixed(2)}`,
+      `ATK SPD   ${Math.round(stats.atkspd * 100)}%`,
+      `DEF       ${Math.round(stats.def * 100)}%`,
+      `GOLD      ${fmt(SAVE.gold)}`,
+    ];
+    lines.forEach((l, i) => {
+      this.add.text(x + 20, y + 64 + i * 32, l, { fontFamily: 'Consolas, monospace', fontSize: '18px', color: '#e6ecf2' });
+    });
+
+    this.add.text(x + 20, y + 240, '장착 중', { fontFamily: 'Arial, sans-serif', fontSize: '18px', color: '#9fd2ff' });
+    const w1 = weaponById(SAVE.equippedWeapon), a1 = armorById(SAVE.equippedArmor);
+    this.add.circle(x + 30, y + 280, 8, RARITY_COLOR[w1.rarity]);
+    this.add.text(x + 46, y + 271, `🏹 ${w1.name}`, { fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#ffffff' });
+    this.add.circle(x + 30, y + 312, 8, RARITY_COLOR[a1.rarity]);
+    this.add.text(x + 46, y + 303, `🛡 ${a1.name}`, { fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#ffffff' });
+
+    this.add.text(x + 20, y + h - 40, `보유 스테이지 진행: ${SAVE.clearedStages}/10`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#7d8794',
+    });
+  }
+
+  buildShopPanel() {
+    const x = 460, y = 90, w = 780, h = 560;
+    this.add.rectangle(x, y, w, h, 0x1d232c, 0.9).setOrigin(0).setStrokeStyle(2, 0x33404f);
+    this.add.text(x + 20, y + 16, '무기', { fontFamily: 'Arial, sans-serif', fontSize: '20px', color: '#ffd166', fontStyle: 'bold' });
+
+    const cardW = 360, cardH = 100, gap = 12;
+    WEAPONS.forEach((item, i) => {
+      const cx = x + 20 + (i % 2) * (cardW + gap);
+      const cy = y + 56 + Math.floor(i / 2) * (cardH + gap);
+      this.buildItemCard(cx, cy, cardW, cardH, item, 'weapon');
+    });
+
+    const armorY = y + 56 + 2 * (cardH + gap) + 30;
+    this.add.text(x + 20, armorY - 24, '방어구', { fontFamily: 'Arial, sans-serif', fontSize: '20px', color: '#ffd166', fontStyle: 'bold' });
+    ARMORS.forEach((item, i) => {
+      const cx = x + 20 + (i % 2) * (cardW + gap);
+      const cy = armorY + Math.floor(i / 2) * (cardH + gap);
+      this.buildItemCard(cx, cy, cardW, cardH, item, 'armor');
+    });
+  }
+
+  buildItemCard(x, y, w, h, item, kind) {
+    const isWeapon = kind === 'weapon';
+    const owned = isWeapon ? SAVE.ownedWeapons.includes(item.id) : SAVE.ownedArmors.includes(item.id);
+    const equipped = isWeapon ? SAVE.equippedWeapon === item.id : SAVE.equippedArmor === item.id;
+
+    const bg = this.add.rectangle(x, y, w, h, 0x262e39).setOrigin(0).setStrokeStyle(equipped ? 3 : 1, equipped ? 0x4caf50 : 0x39424f);
+    this.add.circle(x + 18, y + 20, 8, RARITY_COLOR[item.rarity]);
+    this.add.text(x + 34, y + 10, item.name, { fontFamily: 'Arial, sans-serif', fontSize: '17px', color: '#ffffff', fontStyle: 'bold' });
+
+    let effectText = '';
+    if (isWeapon) {
+      if (item.atk) effectText += `ATK +${item.atk} `;
+      if (item.atkspd) effectText += `ATKSPD ${item.atkspd > 0 ? '+' : ''}${Math.round(item.atkspd * 100)}%`;
+    } else {
+      if (item.hp) effectText += `HP +${item.hp} `;
+      if (item.def) effectText += `DEF +${Math.round(item.def * 100)}%`;
+    }
+    if (!effectText) effectText = '기본 장비';
+    this.add.text(x + 34, y + 34, effectText, { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#b7c2cf' });
+
+    const btnLabel = equipped ? '장착됨' : (owned ? '장착' : `구매 (${item.price}G)`);
+    const canAfford = owned || SAVE.gold >= item.price;
+    const btn = makeButton(this, x + w - 78, y + h / 2 + 6, 130, 40, btnLabel, {
+      bg: equipped ? 0x4caf50 : (owned ? 0x2d6cdf : 0x8a6d2f),
+      fontSize: 14,
+      enabled: !equipped && canAfford,
+      onClick: () => {
+        if (!owned) {
+          SAVE.gold -= item.price;
+          if (isWeapon) SAVE.ownedWeapons.push(item.id); else SAVE.ownedArmors.push(item.id);
+        }
+        if (isWeapon) SAVE.equippedWeapon = item.id; else SAVE.equippedArmor = item.id;
+        persistSave();
+        this.scene.restart({ comingStage: this.comingStage });
+      },
+    });
+  }
+}
+
+/* ================= RESULT SCENE ================= */
+class ResultScene extends Phaser.Scene {
+  constructor() { super('ResultScene'); }
+  init(data) { this.win = data.win; }
+
+  create() {
+    this.add.rectangle(0, 0, W, H, 0x14181f).setOrigin(0);
+    this.add.text(W / 2, 100, this.win ? 'VICTORY!' : 'RUN OVER', {
+      fontFamily: 'Arial, sans-serif', fontSize: '52px', color: this.win ? '#ffd166' : '#ff6b6b', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    this.add.text(W / 2, 170, `도달 스테이지 ${SAVE.clearedStages}   ·   점수 ${fmt(SAVE.runScore)}`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '22px', color: '#e6ecf2',
+    }).setOrigin(0.5);
+
+    const panelX = W / 2 - 260, panelY = 220, panelW = 520, panelH = 300;
+    this.add.rectangle(panelX, panelY, panelW, panelH, 0x1d232c, 0.9).setOrigin(0).setStrokeStyle(2, 0x33404f);
+    this.add.text(panelX + panelW / 2, panelY + 20, 'LEADERBOARD', {
+      fontFamily: 'Arial, sans-serif', fontSize: '20px', color: '#ffd166', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    SAVE.leaderboard.slice(0, 6).forEach((e, i) => {
+      const ry = panelY + 56 + i * 36;
+      this.add.text(panelX + 24, ry, `${i + 1}. ${e.name}`, { fontFamily: 'Arial, sans-serif', fontSize: '17px', color: '#ffffff' });
+      this.add.text(panelX + panelW - 24, ry, `STAGE ${e.stage} · ${fmt(e.score)} pts`, {
+        fontFamily: 'Arial, sans-serif', fontSize: '15px', color: '#9fd2ff',
+      }).setOrigin(1, 0);
+    });
+
+    makeButton(this, W / 2 - 150, H - 70, 260, 58, '다시하기', {
+      bg: 0x2d6cdf,
+      onClick: () => {
+        SAVE.currentStage = 1; SAVE.runScore = 0; SAVE.clearedStages = 0; SAVE.runActive = true;
+        persistSave();
+        this.scene.start('GameScene', { stage: 1 });
+      },
+    });
+    makeButton(this, W / 2 + 150, H - 70, 260, 58, '메뉴로', {
+      bg: 0x555f6c,
+      onClick: () => { this.scene.start('MenuScene'); },
+    });
+  }
+}
+
+/* ================= GAME BOOT ================= */
+const config = {
+  type: Phaser.AUTO,
+  width: W,
+  height: H,
+  parent: 'game-container',
+  backgroundColor: '#0b0d10',
+  disableContextMenu: true,
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  physics: {
+    default: 'matter',
+    matter: { gravity: { y: 1 }, debug: false },
+  },
+  scene: [MenuScene, GameScene, ShopScene, ResultScene],
+};
+
+window.addEventListener('load', () => {
+  new Phaser.Game(config);
+});
+</script>
+</body>
+</html>
