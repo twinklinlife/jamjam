@@ -43,6 +43,21 @@ const MIN_DRAG = 18;
 
 const SHOT_ORIGIN = { x: 300, y: H - 210 };
 const GROUND_Y = H - 110;
+
+// Posture reaction tuning (hit "juice"): a weak hit only kicks angular
+// velocity (wobbles, then the spring pulls it back to restAngle); a strong
+// hit also shifts restAngle itself, so the lean persists. Values tuned live
+// against the actual Matter simulation, not derived analytically.
+const MAX_LEAN = Phaser.Math.DegToRad(16);
+const LEAN_STEP = Phaser.Math.DegToRad(9);
+const WEAK_KICK = 0.05;
+const STRONG_KICK = 0.12;
+const SPRING_K = 55;
+const DAMP_K = 9;
+const STRONG_HIT_DMG = 25;
+const ENEMY_LEAN_DECAY_PER_SEC = 0.15; // fraction of enemy restAngle remaining after 1 real second
+const JUMP_COOLDOWN_MS = 1500;
+const JUMP_HOP_VY = -6.5;
 const PLAYER_X = 300;
 const ENEMY_X = 1000;
 
@@ -223,12 +238,6 @@ function createRagdoll(scene, x, feetY, side, scaleMult) {
     if (isCircle) obj = scene.add.circle(px, py, w, color);
     else obj = scene.add.rectangle(px, py, w, h, color);
     M.add.gameObject(obj, { shape: isCircle ? { type: 'circle', radius: w } : { type: 'rectangle', width: w, height: h }, frictionAir: 0.05, friction: 0.6 });
-    // Lock rotation: a single point-to-point constraint only fixes distance, not
-    // angle, so an unlocked limb swings like a pendulum under gravity instead of
-    // staying attached at its anatomical offset. Locking inertia keeps limbs
-    // planted while still letting them translate/wobble when hit.
-    obj.body.inertia = Infinity;
-    obj.body.inverseInertia = 0;
     obj.setData('partType', partType);
     obj.setData('side', side);
     obj.body.label = side + '_' + partType;
@@ -260,24 +269,56 @@ function createRagdoll(scene, x, feetY, side, scaleMult) {
   constraints.push(M.add.constraint(torso.body, legR.body, 4 * scaleMult, 0.75, { pointA: { x: torsoW / 4, y: torsoH / 2 }, pointB: { x: 0, y: -limbH / 2 } }));
 
   const parts = { torso, head, armL, armR, legL, legR };
+  const allBodies = [torso, head, armL, armR, legL, legR];
 
   return {
-    x, feetY, side, parts, anchor, constraints,
-    allBodies: [torso, head, armL, armR, legL, legR],
+    x, feetY, side, parts, anchor, constraints, allBodies,
+    restAngle: 0,
+    decay: !isPlayer, // enemy has no manual reset, so its lean fades on its own
+    dead: false,
     setTint(color) { Object.values(parts).forEach(p => { if (p.active) p.setFillStyle(color); }); },
     flashPart(part) {
       const orig = part.fillColor;
       part.setFillStyle(0xffffff);
       scene.time.delayedCall(90, () => { if (part.active) part.setFillStyle(orig); });
     },
+    // Continuous spring-damper pulling every part's rotation toward restAngle.
+    // A single point constraint only fixes distance, not angle, so without this
+    // gravity would spin limbs freely (the original "head sinks to the floor"
+    // bug); with it, the character holds a stance and reactToHit's temporary
+    // kicks read as a wobble (restAngle unchanged) or a persistent lean
+    // (restAngle shifted).
+    applyPostureSpring(dt) { // dt = real seconds since last frame
+      if (this.dead) return;
+      if (this.decay) this.restAngle *= Math.pow(ENEMY_LEAN_DECAY_PER_SEC, dt);
+      allBodies.forEach(p => {
+        if (!p.active) return;
+        const diff = Phaser.Math.Angle.Wrap(this.restAngle - p.rotation);
+        const angAccel = diff * SPRING_K - p.body.angularVelocity * DAMP_K;
+        p.setAngularVelocity(p.body.angularVelocity + angAccel * dt);
+      });
+    },
+    reactToHit(dirSign, strong) {
+      if (this.dead) return;
+      const kick = strong ? STRONG_KICK : WEAK_KICK;
+      allBodies.forEach(p => { if (p.active) p.setAngularVelocity(p.body.angularVelocity + kick * dirSign); });
+      if (strong) {
+        this.restAngle = Phaser.Math.Clamp(this.restAngle + LEAN_STEP * dirSign, -MAX_LEAN, MAX_LEAN);
+      }
+    },
+    resetPosture() {
+      this.restAngle = 0;
+      if (torso.active) torso.setVelocity(torso.body.velocity.x, JUMP_HOP_VY);
+    },
     ragdollize() {
       // loosen on death for a floppy collapse
+      this.dead = true;
       constraints.forEach(c => { c.stiffness = 0.15; });
-      this.allBodies.forEach(p => { if (p.active) p.setCollidesWith([]); });
+      allBodies.forEach(p => { if (p.active) p.setCollidesWith([]); });
     },
     destroy() {
       constraints.forEach(c => scene.matter.world.removeConstraint(c));
-      this.allBodies.forEach(p => p.destroy());
+      allBodies.forEach(p => p.destroy());
       scene.matter.world.remove(anchor);
     },
   };
@@ -392,10 +433,12 @@ class GameScene extends Phaser.Scene {
     this.isDragging = false;
     this.lastShotTime = -99999;
     this.lastEnemyShotTime = this.time.now;
+    this.lastJumpTime = -99999;
 
     this.buildHud(boss);
 
-    this.input.on('pointerdown', (p) => {
+    this.input.on('pointerdown', (p, currentlyOver) => {
+      if (currentlyOver.length > 0) return; // tapped a UI button (e.g. Jump), not the aim area
       if (this.state !== 'AIMING') return;
       if (!this.canFire()) return;
       this.isDragging = true;
@@ -438,6 +481,21 @@ class GameScene extends Phaser.Scene {
 
     this.reloadBarBg = this.add.rectangle(margin, 92, 160, 10, 0x33393f).setOrigin(0, 0.5);
     this.reloadBar = this.add.rectangle(margin, 92, 160, 10, 0xffd166).setOrigin(0, 0.5);
+
+    this.jumpBtn = makeButton(this, W / 2, H - margin - 30, 140, 52, 'JUMP', {
+      bg: 0x555f6c,
+      fontSize: 18,
+      onClick: () => this.tryJump(),
+    });
+  }
+
+  tryJump() {
+    if (this.state !== 'AIMING') return;
+    if (this.time.now - this.lastJumpTime < JUMP_COOLDOWN_MS) return;
+    this.lastJumpTime = this.time.now;
+    this.player.resetPosture();
+    this.jumpBtn.setEnabled(false);
+    this.time.delayedCall(JUMP_COOLDOWN_MS, () => this.jumpBtn.setEnabled(true));
   }
 
   canFire() { return this.time.now - this.lastShotTime >= this.stats.reload; }
@@ -525,22 +583,28 @@ class GameScene extends Phaser.Scene {
     }
     this.destroyArrow(arrow);
 
+    const dirSign = Math.sign(vel.x) || 1;
+
     if (targetSide === 'enemy') {
       const dmg = Math.round(DAMAGE_BASE[partType] * this.stats.atk);
+      const strong = partType === 'head' || dmg >= STRONG_HIT_DMG;
       this.enemyHP = Math.max(0, this.enemyHP - dmg);
       SAVE.runScore += dmg;
       this.hudScore.setText(`SCORE ${fmt(SAVE.runScore)}   GOLD ${fmt(SAVE.gold)}`);
       this.enemyHpBar.width = 260 * (this.enemyHP / this.enemyMaxHP);
       this.enemy.flashPart(part);
+      this.enemy.reactToHit(dirSign, strong);
       this.popupScore(contact.x, contact.y - 20, partType.toUpperCase() + ' ' + dmg, partType === 'head' ? '#ffd166' : '#ffffff');
       this.cameras.main.shake(partType === 'head' ? 140 : 80, partType === 'head' ? 0.008 : 0.004);
       if (this.enemyHP <= 0 && this.state === 'AIMING') this.onEnemyDefeated();
     } else {
       const dmgRaw = Phaser.Math.Between(8, 14);
       const dmg = Math.round(dmgRaw * (1 - this.stats.def));
+      const strong = partType === 'head' || dmg >= STRONG_HIT_DMG;
       this.playerHP = Math.max(0, this.playerHP - dmg);
       this.playerHpBar.width = 260 * (this.playerHP / this.playerMaxHP);
       this.player.flashPart(part);
+      this.player.reactToHit(dirSign, strong);
       this.flashRed();
       this.cameras.main.shake(100, 0.006);
       if (this.playerHP <= 0 && this.state === 'AIMING') this.onPlayerDefeated();
@@ -617,6 +681,10 @@ class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    const dt = Math.min(delta / 1000, 1 / 15); // clamp so a stall/tab-switch can't spike the spring
+    this.player.applyPostureSpring(dt);
+    this.enemy.applyPostureSpring(dt);
+
     // reload gauge
     const readiness = Phaser.Math.Clamp((time - this.lastShotTime) / this.stats.reload, 0, 1);
     this.reloadBar.width = 160 * readiness;
