@@ -33,7 +33,7 @@
 
 /* ---------- Config / data tables ---------- */
 const W = 1280, H = 720;
-const STAGE_MAX = 10;
+const STAGE_MAX = 2;
 
 const STEP_HZ = 60;
 const GRAVITY_PX = 1000;          // px/s^2, calibrated empirically against Matter world gravity (y:1)
@@ -93,21 +93,17 @@ const ARMORS = [
 function weaponById(id) { return WEAPONS.find(w => w.id === id) || WEAPONS[0]; }
 function armorById(id) { return ARMORS.find(a => a.id === id) || ARMORS[0]; }
 
-function enemyHpFor(stage) {
-  const isBoss = stage % 5 === 0;
-  let hp = 60 + stage * 15;
-  if (isBoss) hp *= 2.5;
-  return Math.round(hp);
-}
-function enemyReloadFor(stage) { return Math.max(900, 2000 - stage * 80); }
-function enemyAimErrorFor(stage) { return Math.max(3, 14 - stage * 1); } // degrees
-function goldFor(stage) {
-  const isBoss = stage % 5 === 0;
-  let g = 40 + stage * 10;
-  if (isBoss) g *= 3;
-  return Math.round(g);
-}
-function isBossStage(stage) { return stage % 5 === 0; }
+// Only 2 stages now (60-second play-length target) — every stage is a
+// named boss, so a hand-tuned table replaces the old 10-stage formulas.
+// reload/aimError/gold/scoreBonus reuse the original stage-5/stage-10
+// values (already felt right for a boss fight); HP is deliberately cut
+// since the old numbers assumed 4 prior stages of gear grinding that no
+// longer happen before the player meets these bosses.
+const BOSSES = [
+  { name: 'Underboss Lim', hp: 120, reload: 1600, aimError: 9, gold: 270, scoreBonus: 800, scaleMult: 1.15, tint: 0x3a4a63 },
+  { name: 'Captain Woo', hp: 180, reload: 1200, aimError: 4, gold: 420, scoreBonus: 1300, scaleMult: 0.9, tint: 0x1c1c1c },
+];
+function bossFor(stage) { return BOSSES[Math.min(Math.max(stage - 1, 0), BOSSES.length - 1)]; }
 
 function computePlayerStats(save) {
   const w = weaponById(save.equippedWeapon);
@@ -468,15 +464,15 @@ class GameScene extends Phaser.Scene {
     this.playerHP = this.stats.maxHp;
     this.playerMaxHP = this.stats.maxHp;
 
-    const boss = isBossStage(this.stage);
-    this.enemyMaxHP = enemyHpFor(this.stage);
+    const boss = bossFor(this.stage);
+    this.enemyMaxHP = boss.hp;
     this.enemyHP = this.enemyMaxHP;
-    this.enemyReload = enemyReloadFor(this.stage);
-    this.enemyAimError = enemyAimErrorFor(this.stage);
+    this.enemyReload = boss.reload;
+    this.enemyAimError = boss.aimError;
 
     this.player = createRagdoll(this, PLAYER_X, GROUND_Y, 'player', 1);
-    this.enemy = createRagdoll(this, ENEMY_X, GROUND_Y, 'enemy', boss ? 1.35 : 1);
-    if (boss) this.enemy.setTint(0x7a3fa0);
+    this.enemy = createRagdoll(this, ENEMY_X, GROUND_Y, 'enemy', boss.scaleMult);
+    this.enemy.setTint(boss.tint);
 
     this.arrows = [];
     this.dots = [];
@@ -519,8 +515,8 @@ class GameScene extends Phaser.Scene {
 
   buildHud(boss) {
     const margin = 24;
-    this.hudStage = this.add.text(W / 2, margin, `STAGE ${this.stage}${boss ? '  (BOSS)' : ''}`, {
-      fontFamily: 'Arial, sans-serif', fontSize: '24px', color: boss ? '#ffd166' : '#ffffff', fontStyle: 'bold',
+    this.hudStage = this.add.text(W / 2, margin, `STAGE ${this.stage} — ${boss.name}`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '24px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5, 0);
 
     this.hudScore = this.add.text(margin, margin, `SCORE ${fmt(SAVE.runScore)}   GOLD ${fmt(SAVE.gold)}`, {
@@ -534,7 +530,7 @@ class GameScene extends Phaser.Scene {
 
     this.enemyHpBarBg = this.add.rectangle(W - margin, 64, 260, 20, 0x33393f).setOrigin(1, 0.5);
     this.enemyHpBar = this.add.rectangle(W - margin, 64, 260, 20, 0xd9534f).setOrigin(1, 0.5);
-    this.add.text(W - margin, 44, 'ENEMY', { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#c8d3e0' }).setOrigin(1, 0);
+    this.add.text(W - margin, 44, boss.name.toUpperCase(), { fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#c8d3e0' }).setOrigin(1, 0);
 
     this.reloadBarBg = this.add.rectangle(margin, 92, 160, 10, 0x33393f).setOrigin(0, 0.5);
     this.reloadBar = this.add.rectangle(margin, 92, 160, 10, 0xffd166).setOrigin(0, 0.5);
@@ -694,16 +690,16 @@ class GameScene extends Phaser.Scene {
   onEnemyDefeated() {
     this.state = 'CLEAR';
     this.enemy.ragdollize();
-    const boss = isBossStage(this.stage);
-    const gold = goldFor(this.stage);
+    const boss = bossFor(this.stage);
+    const gold = boss.gold;
     SAVE.gold += gold;
-    SAVE.runScore += 100 * this.stage + (boss ? 300 : 0);
+    SAVE.runScore += boss.scoreBonus;
     SAVE.clearedStages = Math.max(SAVE.clearedStages, this.stage);
     SAVE.currentStage = this.stage + 1;
     SAVE.runActive = true;
     persistSave();
 
-    this.add.text(W / 2, H / 2 - 60, boss ? 'BOSS DEFEATED!' : 'STAGE CLEAR!', {
+    this.add.text(W / 2, H / 2 - 60, `${boss.name.toUpperCase()} DEFEATED!`, {
       fontFamily: 'Arial, sans-serif', fontSize: '42px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5);
     this.add.text(W / 2, H / 2, `+${gold} GOLD`, {
@@ -827,7 +823,7 @@ class ShopScene extends Phaser.Scene {
     this.add.circle(x + 30, y + 312, 8, RARITY_COLOR[a1.rarity]);
     this.add.text(x + 46, y + 303, `🛡 ${a1.name}`, { fontFamily: 'Arial, sans-serif', fontSize: '16px', color: '#ffffff' });
 
-    this.add.text(x + 20, y + h - 40, `보유 스테이지 진행: ${SAVE.clearedStages}/10`, {
+    this.add.text(x + 20, y + h - 40, `보유 스테이지 진행: ${SAVE.clearedStages}/${STAGE_MAX}`, {
       fontFamily: 'Arial, sans-serif', fontSize: '14px', color: '#7d8794',
     });
   }
