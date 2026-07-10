@@ -100,9 +100,12 @@ function armorById(id) { return ARMORS.find(a => a.id === id) || ARMORS[0]; }
 // "awakens" into; HP is deliberately cut since the old numbers assumed 4
 // prior stages of gear grinding that no longer happen before the player
 // meets these bosses. easyReload/easyAimError are the softer opening-phase
-// values the boss uses for the first AWAKEN_AT_MS of the fight before it
-// snaps to the tuned reload/aimError above.
-const AWAKEN_AT_MS = 10000;
+// values the boss uses for the first AWAKEN_AT_MS of the fight. At that
+// point it enters a AWAKEN_CUTSCENE_MS-long "awakening" beat (visual only,
+// boss holds fire — the player can keep shooting for free hits) before
+// snapping to the tuned reload/aimError above and resuming fire.
+const AWAKEN_AT_MS = 15000;
+const AWAKEN_CUTSCENE_MS = 3000;
 const BOSSES = [
   { name: 'Underboss Lim', hp: 120, reload: 1600, aimError: 9, easyReload: 2600, easyAimError: 18, gold: 270, scoreBonus: 800, scaleMult: 1.15, tint: 0x3a4a63 },
   { name: 'Captain Woo', hp: 180, reload: 1200, aimError: 4, easyReload: 2000, easyAimError: 12, gold: 420, scoreBonus: 1300, scaleMult: 0.9, tint: 0x1c1c1c },
@@ -477,6 +480,7 @@ class GameScene extends Phaser.Scene {
     this.enemyReload = boss.easyReload;
     this.enemyAimError = boss.easyAimError;
     this.awakened = false;
+    this.awakening = false;
     this.stageStartTime = this.time.now;
 
     this.player = createRagdoll(this, PLAYER_X, GROUND_Y, 'player', 1);
@@ -758,8 +762,9 @@ class GameScene extends Phaser.Scene {
       this.awakenBoss();
     }
 
-    // enemy auto-fire
-    if (this.state === 'AIMING' && time - this.lastEnemyShotTime >= this.enemyReload) {
+    // enemy auto-fire (held off during the awakening cutscene — the boss is
+    // powering up and doesn't shoot, so the player gets free hits in)
+    if (this.state === 'AIMING' && !this.awakening && time - this.lastEnemyShotTime >= this.enemyReload) {
       this.lastEnemyShotTime = time;
       this.enemyFire();
     }
@@ -792,30 +797,47 @@ class GameScene extends Phaser.Scene {
     this.spawnArrow(ENEMY_X, SHOT_ORIGIN.y, vx, vy, 'enemy');
   }
 
+  // Boss "awakening": a AWAKEN_CUTSCENE_MS-long beat where the boss holds
+  // fire (the player can keep shooting for free hits) while a charging-up
+  // visual plays, capped by a bigger "release" flash the instant it snaps
+  // to full strength and resumes firing.
   awakenBoss() {
     this.awakened = true;
-    this.enemyReload = this.bossData.reload;
-    this.enemyAimError = this.bossData.aimError;
-
-    this.cameras.main.shake(260, 0.012);
+    this.awakening = true;
 
     const torso = this.enemy.parts.torso;
-    const flash = this.add.circle(torso.x, torso.y, 10, 0xff5533, 0.85);
-    this.tweens.add({ targets: flash, radius: 90, alpha: 0, duration: 420, onComplete: () => flash.destroy() });
 
-    Object.values(this.enemy.parts).forEach(p => {
-      if (!p.active) return;
-      this.tweens.add({ targets: p, scaleX: 1.22, scaleY: 1.22, duration: 130, yoyo: true, ease: 'Quad.easeOut' });
+    this.cameras.main.shake(220, 0.01);
+    const flash1 = this.add.circle(torso.x, torso.y, 10, 0xff5533, 0.85);
+    this.tweens.add({ targets: flash1, radius: 100, alpha: 0, duration: 450, onComplete: () => flash1.destroy() });
+
+    const banner = this.add.text(ENEMY_X, torso.y - 110, `${this.bossData.name.toUpperCase()} 각성 중...`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '28px', color: '#ff5533', fontStyle: 'bold',
+    }).setOrigin(0.5).setScale(0.4).setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, scale: 1, duration: 220, ease: 'Back.easeOut' });
+
+    // sustained charging pulse across the whole cutscene window
+    const pulseParts = Object.values(this.enemy.parts).filter(p => p.active);
+    const pulseCycles = Math.max(1, Math.round(AWAKEN_CUTSCENE_MS / 500) - 1);
+    this.tweens.add({
+      targets: pulseParts, scaleX: 1.15, scaleY: 1.15, duration: 250, yoyo: true,
+      repeat: pulseCycles, ease: 'Sine.easeInOut',
     });
 
-    const banner = this.add.text(ENEMY_X, torso.y - 110, `${this.bossData.name.toUpperCase()} 각성!!`, {
-      fontFamily: 'Arial, sans-serif', fontSize: '30px', color: '#ff5533', fontStyle: 'bold',
-    }).setOrigin(0.5).setScale(0.4).setAlpha(0);
-    this.tweens.add({
-      targets: banner, alpha: 1, scale: 1, duration: 220, ease: 'Back.easeOut',
-      onComplete: () => {
-        this.tweens.add({ targets: banner, alpha: 0, y: banner.y - 30, duration: 500, delay: 500, onComplete: () => banner.destroy() });
-      },
+    this.time.delayedCall(AWAKEN_CUTSCENE_MS, () => {
+      this.awakening = false;
+      this.enemyReload = this.bossData.reload;
+      this.enemyAimError = this.bossData.aimError;
+      this.lastEnemyShotTime = this.time.now; // fresh reload window, no instant cheap shot
+
+      this.cameras.main.shake(300, 0.016);
+      const flash2 = this.add.circle(torso.x, torso.y, 10, 0xff2200, 0.9);
+      this.tweens.add({ targets: flash2, radius: 140, alpha: 0, duration: 380, onComplete: () => flash2.destroy() });
+
+      if (banner.active) {
+        banner.setText(`${this.bossData.name.toUpperCase()} 각성!!`);
+        this.tweens.add({ targets: banner, alpha: 0, y: banner.y - 30, duration: 450, onComplete: () => banner.destroy() });
+      }
     });
   }
 }
