@@ -1,26 +1,28 @@
-# Ragdoll Archer Quest
+# Defeat Dark Lord WOO
 
-드래그로 조준해 화살을 쏘고, 부위 명중으로 적을 쓰러뜨리는 싱글 플레이 라그돌 아처 게임.
-2개 스테이지(Underboss Lim → Captain Woo)로 구성된 보스 러시. Phaser 3 + Matter physics로
+드래그로 조준해 화살을 쏘고, 부위 명중으로 적을 쓰러뜨리는 싱글 플레이 아처 게임.
+2개 스테이지(The Conqueror LIM → Dark Lord WOO)로 구성된 보스 러시. Phaser 3 + Matter physics로
 구현된 단일 `index.html` 파일.
 
 - **폴더**: `jamjam/ragdoll-archer-quest`
 - **최종 제출 파일**: `jamjam/ragdoll-archer-quest/index.html`
-- **기술 스택**: Phaser 3 (CDN) + 내장 Matter physics, 외부 이미지 asset 없음(전부 도형), localStorage 저장
+- **기술 스택**: Phaser 3 (CDN) + 내장 Matter physics, 캐릭터 아트는 base64로 파일에 내장된 이미지,
+  localStorage 저장
 
 ## 조작 방법
 
 - **드래그 조준 → 놓아서 발사**: 화면 아무 곳이나 눌러서 당기면 조준 궤적(점선)이 표시되고,
   놓으면 그 방향/힘으로 화살이 발사됩니다.
-- 마우스와 터치 모두 동일하게 동작하며, 키보드는 사용하지 않습니다(iframe 포커스 문제 방지).
+- 마우스와 터치 모두 동일하게 동작합니다.
 - 짧게 당겼다 놓으면 발사가 취소됩니다.
+- 게임 종료(승리/사망) 시 리더보드에 표시할 닉네임을 직접 입력할 수 있습니다(HTML `<input>` 오버레이).
 
 ## 게임 루프
 
 1. 스테이지 시작 → 보스 아처와 대결 (부위별 명중 = 데미지 = 점수: 머리 40 / 몸통 20 / 팔다리 10)
 2. 보스 처치 → 골드 획득 → 상점(스탯/장비 구매) → 다음 스테이지
-3. Stage 1 = Underboss Lim, Stage 2(최종 보스) = Captain Woo
-4. 사망 또는 Stage 2(Captain Woo) 클리어 시 결과 화면 + 로컬 리더보드 갱신
+3. Stage 1 = The Conqueror LIM, Stage 2(최종 보스) = Dark Lord WOO
+4. 사망 또는 Stage 2(Dark Lord WOO) 클리어 시 닉네임 입력 → 결과 화면 + 로컬 리더보드 갱신
 
 진행 상황(스테이지, 골드, 보유/장착 장비, 최고 기록, 리더보드)은 `localStorage`에 저장되어
 새로고침 후에도 "이어하기"로 계속할 수 있습니다.
