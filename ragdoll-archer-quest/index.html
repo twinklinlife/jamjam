@@ -96,12 +96,16 @@ function armorById(id) { return ARMORS.find(a => a.id === id) || ARMORS[0]; }
 // Only 2 stages now (60-second play-length target) — every stage is a
 // named boss, so a hand-tuned table replaces the old 10-stage formulas.
 // reload/aimError/gold/scoreBonus reuse the original stage-5/stage-10
-// values (already felt right for a boss fight); HP is deliberately cut
-// since the old numbers assumed 4 prior stages of gear grinding that no
-// longer happen before the player meets these bosses.
+// values (already felt right for a boss fight) and are what the boss
+// "awakens" into; HP is deliberately cut since the old numbers assumed 4
+// prior stages of gear grinding that no longer happen before the player
+// meets these bosses. easyReload/easyAimError are the softer opening-phase
+// values the boss uses for the first AWAKEN_AT_MS of the fight before it
+// snaps to the tuned reload/aimError above.
+const AWAKEN_AT_MS = 10000;
 const BOSSES = [
-  { name: 'Underboss Lim', hp: 120, reload: 1600, aimError: 9, gold: 270, scoreBonus: 800, scaleMult: 1.15, tint: 0x3a4a63 },
-  { name: 'Captain Woo', hp: 180, reload: 1200, aimError: 4, gold: 420, scoreBonus: 1300, scaleMult: 0.9, tint: 0x1c1c1c },
+  { name: 'Underboss Lim', hp: 120, reload: 1600, aimError: 9, easyReload: 2600, easyAimError: 18, gold: 270, scoreBonus: 800, scaleMult: 1.15, tint: 0x3a4a63 },
+  { name: 'Captain Woo', hp: 180, reload: 1200, aimError: 4, easyReload: 2000, easyAimError: 12, gold: 420, scoreBonus: 1300, scaleMult: 0.9, tint: 0x1c1c1c },
 ];
 function bossFor(stage) { return BOSSES[Math.min(Math.max(stage - 1, 0), BOSSES.length - 1)]; }
 
@@ -465,10 +469,15 @@ class GameScene extends Phaser.Scene {
     this.playerMaxHP = this.stats.maxHp;
 
     const boss = bossFor(this.stage);
+    this.bossData = boss;
     this.enemyMaxHP = boss.hp;
     this.enemyHP = this.enemyMaxHP;
-    this.enemyReload = boss.reload;
-    this.enemyAimError = boss.aimError;
+    // Boss opens in an easier phase and "awakens" into the tuned numbers
+    // above after AWAKEN_AT_MS — see update() / awakenBoss().
+    this.enemyReload = boss.easyReload;
+    this.enemyAimError = boss.easyAimError;
+    this.awakened = false;
+    this.stageStartTime = this.time.now;
 
     this.player = createRagdoll(this, PLAYER_X, GROUND_Y, 'player', 1);
     this.enemy = createRagdoll(this, ENEMY_X, GROUND_Y, 'enemy', boss.scaleMult);
@@ -744,6 +753,11 @@ class GameScene extends Phaser.Scene {
     this.reloadBar.width = 160 * readiness;
     this.reloadBar.setFillStyle(readiness >= 1 ? 0x4caf50 : 0xffd166);
 
+    // boss awakening: opens on the easier phase, then snaps to full strength
+    if (!this.awakened && this.state === 'AIMING' && time - this.stageStartTime >= AWAKEN_AT_MS) {
+      this.awakenBoss();
+    }
+
     // enemy auto-fire
     if (this.state === 'AIMING' && time - this.lastEnemyShotTime >= this.enemyReload) {
       this.lastEnemyShotTime = time;
@@ -776,6 +790,33 @@ class GameScene extends Phaser.Scene {
     vx = Math.cos(angle) * speed;
     vy = Math.sin(angle) * speed;
     this.spawnArrow(ENEMY_X, SHOT_ORIGIN.y, vx, vy, 'enemy');
+  }
+
+  awakenBoss() {
+    this.awakened = true;
+    this.enemyReload = this.bossData.reload;
+    this.enemyAimError = this.bossData.aimError;
+
+    this.cameras.main.shake(260, 0.012);
+
+    const torso = this.enemy.parts.torso;
+    const flash = this.add.circle(torso.x, torso.y, 10, 0xff5533, 0.85);
+    this.tweens.add({ targets: flash, radius: 90, alpha: 0, duration: 420, onComplete: () => flash.destroy() });
+
+    Object.values(this.enemy.parts).forEach(p => {
+      if (!p.active) return;
+      this.tweens.add({ targets: p, scaleX: 1.22, scaleY: 1.22, duration: 130, yoyo: true, ease: 'Quad.easeOut' });
+    });
+
+    const banner = this.add.text(ENEMY_X, torso.y - 110, `${this.bossData.name.toUpperCase()} 각성!!`, {
+      fontFamily: 'Arial, sans-serif', fontSize: '30px', color: '#ff5533', fontStyle: 'bold',
+    }).setOrigin(0.5).setScale(0.4).setAlpha(0);
+    this.tweens.add({
+      targets: banner, alpha: 1, scale: 1, duration: 220, ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({ targets: banner, alpha: 0, y: banner.y - 30, duration: 500, delay: 500, onComplete: () => banner.destroy() });
+      },
+    });
   }
 }
 
