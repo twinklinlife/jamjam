@@ -439,13 +439,11 @@ class MenuScene extends Phaser.Scene {
     nearRidge.closePath();
     nearRidge.fillPath();
 
-    // Boss portraits flanking the leaderboard — cropped directly from the
-    // submission thumbnail (not the in-game pixel-art sprites) with a
-    // feathered edge so they blend into this gradient without a hard seam.
+    // Boss portraits flanking the leaderboard — pre-awaken in-game sprites.
     const feetY = 620;
     [
-      { x: 175, key: 'title_lim', height: 430, label: 'STAGE 1 · The Conqueror LIM' },
-      { x: 1105, key: 'title_woo', height: 400, label: 'STAGE 2 · Dark Lord WOO' },
+      { x: 175, key: 'lim_outfit1', height: 400, label: 'STAGE 1 · The Conqueror LIM' },
+      { x: 1105, key: 'woo_outfit1', height: 380, label: 'STAGE 2 · Dark Lord WOO' },
     ].forEach(({ x, key, height, label }) => {
       const img = this.add.image(x, feetY, key).setOrigin(0.5, 1);
       img.setScale(height / img.height);
