@@ -3,19 +3,28 @@ import type { Restaurant } from "@/lib/types";
 export default function RestaurantCard({
   restaurant,
   distanceLabel,
+  locationTag,
 }: {
   restaurant: Restaurant;
   distanceLabel?: string | null;
+  locationTag?: string | null;
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-lg font-semibold text-gray-900">{restaurant.name}</h3>
-        {restaurant.category && (
-          <span className="shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-            {restaurant.category}
-          </span>
-        )}
+        <div className="flex shrink-0 flex-wrap justify-end gap-1">
+          {locationTag && (
+            <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+              {locationTag}
+            </span>
+          )}
+          {restaurant.category && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+              {restaurant.category}
+            </span>
+          )}
+        </div>
       </div>
       <p className="mt-1 text-sm text-gray-500">{restaurant.address}</p>
       {distanceLabel && (

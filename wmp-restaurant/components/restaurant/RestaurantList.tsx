@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import type { Category, Restaurant } from "@/lib/types";
 import { OFFICE_LOCATION } from "@/lib/constants";
 import { distanceMeters, distanceBand, formatDistance, type DistanceBand } from "@/lib/geo";
+import { nearestLandmark, type LandmarkName } from "@/lib/landmarks";
 import SearchBar from "./SearchBar";
 import CategoryFilter from "./CategoryFilter";
 import DistanceFilter from "./DistanceFilter";
+import LocationFilter from "./LocationFilter";
 import RandomPickButton from "./RandomPickButton";
 import RestaurantCard from "./RestaurantCard";
 
 interface RestaurantWithDistance extends Restaurant {
   distanceM: number | null;
+  landmark: LandmarkName | null;
 }
 
 export default function RestaurantList() {
@@ -20,6 +23,7 @@ export default function RestaurantList() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<Category | null>(null);
   const [distance, setDistance] = useState<DistanceBand | null>(null);
+  const [location, setLocation] = useState<LandmarkName | null>(null);
   const [picked, setPicked] = useState<RestaurantWithDistance | null>(null);
 
   useEffect(() => {
@@ -36,6 +40,7 @@ export default function RestaurantList() {
         r.lat !== null && r.lng !== null
           ? distanceMeters(OFFICE_LOCATION.lat, OFFICE_LOCATION.lng, r.lat, r.lng)
           : null,
+      landmark: r.lat !== null && r.lng !== null ? nearestLandmark(r.lat, r.lng) : null,
     }));
   }, [restaurants]);
 
@@ -46,11 +51,14 @@ export default function RestaurantList() {
       if (distance) {
         if (r.distanceM === null || distanceBand(r.distanceM) !== distance) return false;
       }
+      if (location) {
+        if (r.landmark !== location) return false;
+      }
       if (!keyword) return true;
       const haystack = `${r.name} ${r.signatureMenu ?? ""}`.toLowerCase();
       return haystack.includes(keyword);
     });
-  }, [withDistance, search, category, distance]);
+  }, [withDistance, search, category, distance, location]);
 
   function handleSearchChange(value: string) {
     setSearch(value);
@@ -67,6 +75,11 @@ export default function RestaurantList() {
     setPicked(null);
   }
 
+  function handleLocationChange(value: LandmarkName | null) {
+    setLocation(value);
+    setPicked(null);
+  }
+
   function handleRandomPick() {
     if (filtered.length === 0) return;
     const index = Math.floor(Math.random() * filtered.length);
@@ -78,6 +91,7 @@ export default function RestaurantList() {
       <SearchBar value={search} onChange={handleSearchChange} />
       <CategoryFilter selected={category} onChange={handleCategoryChange} />
       <DistanceFilter selected={distance} onChange={handleDistanceChange} />
+      <LocationFilter selected={location} onChange={handleLocationChange} />
       <RandomPickButton onPick={handleRandomPick} disabled={filtered.length === 0} />
 
       {picked && (
@@ -86,6 +100,7 @@ export default function RestaurantList() {
           <RestaurantCard
             restaurant={picked}
             distanceLabel={picked.distanceM !== null ? formatDistance(picked.distanceM) : null}
+            locationTag={picked.landmark}
           />
         </div>
       )}
@@ -103,6 +118,7 @@ export default function RestaurantList() {
                 key={r.id}
                 restaurant={r}
                 distanceLabel={r.distanceM !== null ? formatDistance(r.distanceM) : null}
+                locationTag={r.landmark}
               />
             ))}
           </div>
