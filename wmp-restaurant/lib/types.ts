@@ -13,6 +13,19 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+export const CATEGORY_EMOJI: Record<Category, string> = {
+  한식: "🍚",
+  중식: "🥟",
+  일식: "🍣",
+  양식: "🍝",
+  분식: "🍢",
+  "고기/구이": "🥩",
+  "카페/디저트": "☕",
+  "치킨/버거": "🍔",
+  술집: "🍺",
+  기타: "🍽️",
+};
+
 export interface Restaurant {
   id: string;
   name: string;

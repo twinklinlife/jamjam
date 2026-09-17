@@ -1,6 +1,6 @@
 "use client";
 
-import { CATEGORIES, type Category } from "@/lib/types";
+import { CATEGORIES, CATEGORY_EMOJI, type Category } from "@/lib/types";
 
 interface Props {
   selected: Category | null;
@@ -30,7 +30,7 @@ export default function CategoryFilter({ selected, onChange }: Props) {
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
-          {category}
+          {CATEGORY_EMOJI[category]} {category}
         </button>
       ))}
     </div>
