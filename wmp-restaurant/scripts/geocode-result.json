@@ -1453,5 +1453,85 @@
     "naverLink": "https://naver.me/xTyYrQW3",
     "lat": 37.3977452704965,
     "lng": 127.11143339349
+  },
+  {
+    "naverLink": "https://map.naver.com/p/entry/place/1034760701?lng=127.1135578&lat=37.3977288&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100952%26locale%3Dko%26svcName%3Dmap_pcv5&entry=plt&searchType=place&c=15.00,0,0,3,dh",
+    "lat": 37.3973207561987,
+    "lng": 127.11356226927
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EC%9D%B4%EA%B4%80%EB%B3%B5%EB%AA%85%EC%9E%A5%EB%83%89%EB%A9%B4%20%ED%8C%90%EA%B5%90%EC%97%AD?c=15.00,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100953%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EC%9D%B4%EA%B4%80%EB%B3%B5%EB%AA%85%EC%9E%A5%EB%83%89%EB%A9%B4%20%ED%8C%90%EA%B5%90%EC%97%AD",
+    "lat": 37.3980298796617,
+    "lng": 127.112030343708
+  },
+  {
+    "naverLink": "https://map.naver.com/p/entry/place/1312199062?c=15.50,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100954%26locale%3Dko%26svcName%3Dmap_pcv5",
+    "lat": 37.3925072208217,
+    "lng": 127.110430292919
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%ED%94%84%EB%A1%9C%ED%8B%B0%EB%84%88%20%ED%8C%90%EA%B5%90%EC%97%AD%EC%A0%90?c=15.50,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100955%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%ED%94%84%EB%A1%9C%ED%8B%B0%EB%84%88%20%ED%8C%90%EA%B5%90%EC%97%AD%EC%A0%90",
+    "lat": 37.3966887360553,
+    "lng": 127.110662408872
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%ED%9B%84%ED%86%A0%EB%A3%A8%20%ED%8C%90%EA%B5%90%EC%A0%90/place/2013820053?c=15.50,0,0,3,dh&placePath=%2Fhome%3Fentry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609100955%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%ED%9B%84%ED%86%A0%EB%A3%A8%20%ED%8C%90%EA%B5%90%EC%A0%90",
+    "lat": 37.4013348710874,
+    "lng": 127.108698530906
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EB%A6%AC%ED%8B%80%EC%82%AC%EC%9D%B4%EA%B3%B5%20%ED%8C%90%EA%B5%90%EC%A0%90?c=15.50,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100956%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EB%A6%AC%ED%8B%80%EC%82%AC%EC%9D%B4%EA%B3%B5%20%ED%8C%90%EA%B5%90%EC%A0%90",
+    "lat": 37.4013348710874,
+    "lng": 127.108698530906
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EC%95%95%EA%B5%AC%EC%A0%95%EC%83%8C%EB%93%9C%EC%9C%84%EC%B9%98%20%ED%8C%90%EA%B5%90%EC%95%84%EB%B8%8C%EB%89%B4%ED%94%84%EB%9E%91%EC%A0%90?c=15.50,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100956%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EC%95%95%EA%B5%AC%EC%A0%95%EC%83%8C%EB%93%9C%EC%9C%84%EC%B9%98%20%ED%8C%90%EA%B5%90%EC%95%84%EB%B8%8C%EB%89%B4%ED%94%84%EB%9E%91%EC%A0%90",
+    "lat": 37.3973207561987,
+    "lng": 127.11356226927
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%ED%8C%90%EA%B5%90%EC%A7%91%20%EB%B3%B8%EC%A0%90/place/1078094119?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fbk_query%3D%ED%8C%90%EA%B5%90%EC%A7%91%20%EB%B3%B8%EC%A0%90%26entry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609100957%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%ED%8C%90%EA%B5%90%EC%A7%91%20%EB%B3%B8%EC%A0%90",
+    "lat": 37.3965078380505,
+    "lng": 127.110054106871
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%ED%95%B4%EC%84%B1%EB%8B%B9/place/2025467384?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fbk_query%3D%ED%95%B4%EC%84%B1%EB%8B%B9%26entry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609100957%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%ED%95%B4%EC%84%B1%EB%8B%B9",
+    "lat": 37.4021021626954,
+    "lng": 127.110467524727
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EC%97%AD%EC%A0%84%EA%B5%AD%EB%B0%A5%20%ED%8C%90%EA%B5%902%ED%98%B8%EC%A0%90/place/2024013044?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fentry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609100958%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EC%97%AD%EC%A0%84%EA%B5%AD%EB%B0%A5%20%ED%8C%90%EA%B5%902%ED%98%B8%EC%A0%90",
+    "lat": 37.4021021626954,
+    "lng": 127.110467524727
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EC%96%91%EC%B4%8C%EB%A6%AC%EB%8F%88%EA%B0%80%EC%8A%A4%20%ED%8C%90%EA%B5%90%ED%95%98%EC%9D%B4%ED%8E%99%EC%8A%A4%EC%A0%90?c=15.00,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100958%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EC%96%91%EC%B4%8C%EB%A6%AC%EB%8F%88%EA%B0%80%EC%8A%A4%20%ED%8C%90%EA%B5%90%ED%95%98%EC%9D%B4%ED%8E%99%EC%8A%A4%EC%A0%90",
+    "lat": 37.4012832374922,
+    "lng": 127.110454124973
+  },
+  {
+    "naverLink": "https://map.naver.com/p/entry/place/2015500490?c=15.00,0,0,3,dh&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609100959%26locale%3Dko%26svcName%3Dmap_pcv5",
+    "lat": 37.4020767798399,
+    "lng": 127.106110401586
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EC%86%8C%ED%95%B4/place/2055152555?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fbk_query%3D%EC%86%8C%ED%95%B4%26entry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609101002%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EC%86%8C%ED%95%B4",
+    "lat": 37.4004659332759,
+    "lng": 127.106812648944
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EB%8B%B4%EC%83%81/place/2091747773?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fbk_query%3D%EB%8B%B4%EC%83%81%26entry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609101003%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EB%8B%B4%EC%83%81",
+    "lat": 37.4004659332759,
+    "lng": 127.106812648944
+  },
+  {
+    "naverLink": "https://map.naver.com/p/search/%EB%A1%9C%EC%8A%A4%EC%98%A5%20/place/2020150209?c=15.00,0,0,3,dh&placePath=%2Fhome%3Fbk_query%3D%EB%A1%9C%EC%8A%A4%EC%98%A5%20%26entry%3Dbmp%26from%3Dmap%26fromPanelNum%3D2%26timestamp%3D202609101003%26locale%3Dko%26svcName%3Dmap_pcv5%26searchText%3D%EB%A1%9C%EC%8A%A4%EC%98%A5%20",
+    "lat": 37.3973207561987,
+    "lng": 127.11356226927
+  },
+  {
+    "naverLink": "https://map.naver.com/p/entry/place/2006292529?lng=127.1120595&lat=37.39748&placePath=%2Fhome%3Ffrom%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202609140855%26locale%3Dko%26svcName%3Dmap_pcv5&searchType=place&c=15.00,0,0,3,dh",
+    "lat": 37.3974782604352,
+    "lng": 127.112045107709
   }
 ]

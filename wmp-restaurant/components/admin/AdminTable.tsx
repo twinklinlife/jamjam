@@ -75,7 +75,7 @@ export default function AdminTable({ initialRestaurants }: { initialRestaurants:
           disabled={geocoding}
           className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
         >
-          {geocoding ? "갱신 중..." : "좌표(거리) 정보 갱신"}
+          {geocoding ? "갱신 중..." : "빈 항목 채우기 (거리·카테고리·대표메뉴)"}
         </button>
         {geocodeMessage && <p className="text-sm text-gray-600">{geocodeMessage}</p>}
       </div>
