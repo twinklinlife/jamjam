@@ -5,12 +5,14 @@ import type { Category, Restaurant } from "@/lib/types";
 import { OFFICE_LOCATION } from "@/lib/constants";
 import { distanceMeters, distanceBand, formatDistance, type DistanceBand } from "@/lib/geo";
 import { nearestLandmark, type LandmarkName } from "@/lib/landmarks";
+import { type SortOrder } from "@/lib/sort";
 import SearchBar from "./SearchBar";
 import CategoryFilter from "./CategoryFilter";
 import DistanceFilter from "./DistanceFilter";
 import LocationFilter from "./LocationFilter";
 import RandomPickButton from "./RandomPickButton";
 import RestaurantCard from "./RestaurantCard";
+import SortSelect from "./SortSelect";
 
 interface RestaurantWithDistance extends Restaurant {
   distanceM: number | null;
@@ -24,7 +26,7 @@ export default function RestaurantList() {
   const [category, setCategory] = useState<Category | null>(null);
   const [distance, setDistance] = useState<DistanceBand | null>(null);
   const [location, setLocation] = useState<LandmarkName | null>(null);
-  const [sortByDistance, setSortByDistance] = useState(false);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("가나다순");
   const [picked, setPicked] = useState<RestaurantWithDistance | null>(null);
 
   useEffect(() => {
@@ -62,13 +64,15 @@ export default function RestaurantList() {
   }, [withDistance, search, category, distance, location]);
 
   const sorted = useMemo(() => {
-    if (!sortByDistance) return filtered;
-    return [...filtered].sort((a, b) => {
-      if (a.distanceM === null) return 1;
-      if (b.distanceM === null) return -1;
-      return a.distanceM - b.distanceM;
-    });
-  }, [filtered, sortByDistance]);
+    if (sortOrder === "가까운순") {
+      return [...filtered].sort((a, b) => {
+        if (a.distanceM === null) return 1;
+        if (b.distanceM === null) return -1;
+        return a.distanceM - b.distanceM;
+      });
+    }
+    return [...filtered].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  }, [filtered, sortOrder]);
 
   function handleSearchChange(value: string) {
     setSearch(value);
@@ -125,16 +129,7 @@ export default function RestaurantList() {
         <>
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">{filtered.length}개 식당</p>
-            <button
-              onClick={() => setSortByDistance((prev) => !prev)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                sortByDistance
-                  ? "bg-orange-500 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              📏 거리순 정렬 {sortByDistance ? "ON" : "OFF"}
-            </button>
+            <SortSelect value={sortOrder} onChange={setSortOrder} />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {sorted.map((r) => (
