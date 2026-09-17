@@ -1,29 +1,41 @@
 import { CATEGORY_EMOJI, type Restaurant } from "@/lib/types";
 import { displayAddress } from "@/lib/format";
+import type { LandmarkName } from "@/lib/landmarks";
 
 export default function RestaurantCard({
   restaurant,
   distanceLabel,
   locationTag,
+  onLocationTagClick,
+  onCategoryClick,
 }: {
   restaurant: Restaurant;
   distanceLabel?: string | null;
-  locationTag?: string | null;
+  locationTag?: LandmarkName | null;
+  onLocationTagClick?: (tag: LandmarkName) => void;
+  onCategoryClick?: (category: NonNullable<Restaurant["category"]>) => void;
 }) {
+  const category = restaurant.category;
   return (
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md">
       <div className="flex-1">
         <h3 className="text-lg font-semibold text-gray-900">{restaurant.name}</h3>
         <div className="mt-1.5 flex flex-wrap gap-1">
           {locationTag && (
-            <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+            <button
+              onClick={() => onLocationTagClick?.(locationTag)}
+              className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+            >
               {locationTag}
-            </span>
+            </button>
           )}
-          {restaurant.category && (
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-              {CATEGORY_EMOJI[restaurant.category]} {restaurant.category}
-            </span>
+          {category && (
+            <button
+              onClick={() => onCategoryClick?.(category)}
+              className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              {CATEGORY_EMOJI[category]} {category}
+            </button>
           )}
         </div>
         <p className="mt-1.5 text-sm text-gray-500">{displayAddress(restaurant.address)}</p>

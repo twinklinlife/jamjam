@@ -111,6 +111,8 @@ export default function RestaurantList() {
             restaurant={picked}
             distanceLabel={picked.distanceM !== null ? formatDistance(picked.distanceM) : null}
             locationTag={picked.landmark}
+            onLocationTagClick={handleLocationChange}
+            onCategoryClick={handleCategoryChange}
           />
         </div>
       )}
@@ -141,6 +143,8 @@ export default function RestaurantList() {
                 restaurant={r}
                 distanceLabel={r.distanceM !== null ? formatDistance(r.distanceM) : null}
                 locationTag={r.landmark}
+                onLocationTagClick={handleLocationChange}
+                onCategoryClick={handleCategoryChange}
               />
             ))}
           </div>
