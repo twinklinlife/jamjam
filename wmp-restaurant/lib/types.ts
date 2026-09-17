@@ -43,3 +43,9 @@ export interface RawRestaurantRow {
   address: string;
   naverLink: string;
 }
+
+export interface Feedback {
+  id: string;
+  text: string;
+  createdAt: string;
+}

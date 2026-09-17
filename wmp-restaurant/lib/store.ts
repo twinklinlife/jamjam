@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { KV_KEY } from "./constants";
-import type { Restaurant } from "./types";
+import { FEEDBACK_KV_KEY, KV_KEY } from "./constants";
+import type { Feedback, Restaurant } from "./types";
 import seedData from "./seed-data.json";
 
 declare global {
@@ -12,6 +12,7 @@ declare global {
 }
 
 const LOCAL_FILE = path.join(process.cwd(), ".data", "restaurants.json");
+const LOCAL_FEEDBACK_FILE = path.join(process.cwd(), ".data", "feedback.json");
 
 function getKV(): KVNamespace | null {
   try {
@@ -48,4 +49,28 @@ export async function writeRestaurants(list: Restaurant[]): Promise<void> {
   }
   await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true });
   await fs.writeFile(LOCAL_FILE, JSON.stringify(list, null, 2), "utf-8");
+}
+
+export async function readFeedback(): Promise<Feedback[]> {
+  const kv = getKV();
+  if (kv) {
+    const raw = await kv.get<Feedback[]>(FEEDBACK_KV_KEY, "json");
+    return raw ?? [];
+  }
+  try {
+    const raw = await fs.readFile(LOCAL_FEEDBACK_FILE, "utf-8");
+    return JSON.parse(raw) as Feedback[];
+  } catch {
+    return [];
+  }
+}
+
+export async function writeFeedback(list: Feedback[]): Promise<void> {
+  const kv = getKV();
+  if (kv) {
+    await kv.put(FEEDBACK_KV_KEY, JSON.stringify(list));
+    return;
+  }
+  await fs.mkdir(path.dirname(LOCAL_FEEDBACK_FILE), { recursive: true });
+  await fs.writeFile(LOCAL_FEEDBACK_FILE, JSON.stringify(list, null, 2), "utf-8");
 }

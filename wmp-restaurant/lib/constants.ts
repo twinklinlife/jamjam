@@ -1,4 +1,6 @@
 export const KV_KEY = "restaurants";
+export const FEEDBACK_KV_KEY = "feedback";
+export const FEEDBACK_MAX_LENGTH = 500;
 export const ADMIN_COOKIE_NAME = "admin_session";
 export const ADMIN_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
 
