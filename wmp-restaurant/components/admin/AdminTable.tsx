@@ -9,10 +9,29 @@ export default function AdminTable({ initialRestaurants }: { initialRestaurants:
   const [savingId, setSavingId] = useState<string | null>(null);
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeMessage, setGeocodeMessage] = useState<string | null>(null);
+  const [deduping, setDeduping] = useState(false);
+  const [dedupeMessage, setDedupeMessage] = useState<string | null>(null);
 
   async function refresh() {
     const res = await fetch("/api/restaurants");
     setRestaurants(await res.json());
+  }
+
+  async function handleDedupeIds() {
+    setDeduping(true);
+    setDedupeMessage(null);
+    try {
+      const res = await fetch("/api/admin/dedupe-ids", { method: "POST" });
+      const data = (await res.json()) as { fixed?: number; total?: number; error?: string };
+      if (!res.ok) {
+        setDedupeMessage(data.error ?? "중복 id 정리에 실패했습니다.");
+        return;
+      }
+      setDedupeMessage(`${data.fixed}건 정리 완료 (전체 ${data.total}건)`);
+      await refresh();
+    } finally {
+      setDeduping(false);
+    }
   }
 
   async function handleGeocode() {
@@ -78,6 +97,17 @@ export default function AdminTable({ initialRestaurants }: { initialRestaurants:
           {geocoding ? "갱신 중..." : "빈 항목 채우기 (거리·카테고리·대표메뉴)"}
         </button>
         {geocodeMessage && <p className="text-sm text-gray-600">{geocodeMessage}</p>}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <button
+          onClick={handleDedupeIds}
+          disabled={deduping}
+          className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {deduping ? "정리 중..." : "중복 id 정리 (정렬 오작동 수정)"}
+        </button>
+        {dedupeMessage && <p className="text-sm text-gray-600">{dedupeMessage}</p>}
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">

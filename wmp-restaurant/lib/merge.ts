@@ -16,12 +16,27 @@ export interface MergeResult {
   summary: MergeSummary;
 }
 
+function groupBy<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    const group = map.get(key);
+    if (group) group.push(item);
+    else map.set(key, [item]);
+  }
+  return map;
+}
+
 export function mergeRestaurants(
   existing: Restaurant[],
   incoming: RawRestaurantRow[]
 ): MergeResult {
-  const byLink = new Map(existing.map((r) => [r.naverLink, r]));
-  const byName = new Map(existing.map((r) => [normalizeName(r.name), r]));
+  // Grouped (not a 1:1 Map) because the source spreadsheet can legitimately have
+  // multiple rows sharing one naverLink (e.g. a kiosk/QR-order variant of the same
+  // place) — each must still be paired with its own distinct existing restaurant
+  // (and thus keep its own unique id) rather than all collapsing onto one.
+  const byLink = groupBy(existing, (r) => r.naverLink);
+  const byName = groupBy(existing, (r) => normalizeName(r.name));
 
   const now = new Date().toISOString();
   const list: Restaurant[] = [];
@@ -29,7 +44,7 @@ export function mergeRestaurants(
   let kept = 0;
 
   for (const row of incoming) {
-    const match = byLink.get(row.naverLink) ?? byName.get(normalizeName(row.name));
+    const match = byLink.get(row.naverLink)?.shift() ?? byName.get(normalizeName(row.name))?.shift();
 
     if (match) {
       kept++;
