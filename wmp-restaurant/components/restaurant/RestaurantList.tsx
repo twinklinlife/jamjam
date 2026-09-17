@@ -24,6 +24,7 @@ export default function RestaurantList() {
   const [category, setCategory] = useState<Category | null>(null);
   const [distance, setDistance] = useState<DistanceBand | null>(null);
   const [location, setLocation] = useState<LandmarkName | null>(null);
+  const [sortByDistance, setSortByDistance] = useState(false);
   const [picked, setPicked] = useState<RestaurantWithDistance | null>(null);
 
   useEffect(() => {
@@ -59,6 +60,15 @@ export default function RestaurantList() {
       return haystack.includes(keyword);
     });
   }, [withDistance, search, category, distance, location]);
+
+  const sorted = useMemo(() => {
+    if (!sortByDistance) return filtered;
+    return [...filtered].sort((a, b) => {
+      if (a.distanceM === null) return 1;
+      if (b.distanceM === null) return -1;
+      return a.distanceM - b.distanceM;
+    });
+  }, [filtered, sortByDistance]);
 
   function handleSearchChange(value: string) {
     setSearch(value);
@@ -111,9 +121,21 @@ export default function RestaurantList() {
         <p className="py-8 text-center text-gray-500">검색 결과가 없어요.</p>
       ) : (
         <>
-          <p className="text-sm text-gray-500">{filtered.length}개 식당</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">{filtered.length}개 식당</p>
+            <button
+              onClick={() => setSortByDistance((prev) => !prev)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                sortByDistance
+                  ? "bg-orange-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              📏 거리순 정렬 {sortByDistance ? "ON" : "OFF"}
+            </button>
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((r) => (
+            {sorted.map((r) => (
               <RestaurantCard
                 key={r.id}
                 restaurant={r}
