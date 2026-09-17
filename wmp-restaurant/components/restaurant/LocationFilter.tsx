@@ -30,7 +30,7 @@ export default function LocationFilter({ selected, onChange }: Props) {
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
-          📍 {landmark.name}
+          {landmark.name}
         </button>
       ))}
       <button
