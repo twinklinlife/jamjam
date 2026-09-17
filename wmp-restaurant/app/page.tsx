@@ -1,4 +1,5 @@
 import RestaurantList from "@/components/restaurant/RestaurantList";
+import { DATA_UPDATE_LOG } from "@/lib/constants";
 
 export default function Home() {
   return (
@@ -11,6 +12,7 @@ export default function Home() {
         <div className="mt-6">
           <RestaurantList />
         </div>
+        <p className="mt-10 text-center text-xs text-gray-400">{DATA_UPDATE_LOG[0]}</p>
       </main>
     </div>
   );
