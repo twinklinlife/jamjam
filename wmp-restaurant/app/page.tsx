@@ -2,6 +2,10 @@ import RestaurantList from "@/components/restaurant/RestaurantList";
 import FeedbackButton from "@/components/feedback/FeedbackButton";
 import { DATA_UPDATE_LOG } from "@/lib/constants";
 
+// Prevents this page from being statically cached (which was causing Cloudflare's
+// edge to serve stale HTML/JS references from a previous deploy for up to a year).
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <div className="flex-1 bg-gray-50">
